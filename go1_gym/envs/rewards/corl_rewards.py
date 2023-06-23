@@ -12,6 +12,17 @@ class CoRLRewards:
         self.env = env
 
     # ------------ reward functions----------------
+
+    def _reward_fixed_leg(self):
+        if not self.env.cfg.rewards.reward_fixed_leg:
+            return torch.zeros_like(self.cfg)
+        position = self.env.dof_pos[:, self.env.cfg.rewards.fixed_leg_dof_indices]
+        error = torch.sum(torch.square(position - self.env.cfg.rewards.fixed_leg_dof_target), 1)
+        return 100 - error  # only positive rewards
+    def _reward_fixed_leg_torques(self):
+        return 100 - torch.sum(torch.square(self.env.torques[:, self.env.cfg.rewards.fixed_leg_dof_indices]), dim=1)
+
+    # -------------- original --------------------
     def _reward_tracking_lin_vel(self):
         # Tracking of linear velocity commands (xy axes)
         lin_vel_error = torch.sum(torch.square(self.env.commands[:, :2] - self.env.base_lin_vel[:, :2]), dim=1)

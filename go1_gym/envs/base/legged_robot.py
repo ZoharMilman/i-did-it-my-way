@@ -918,12 +918,17 @@ class LeggedRobot(BaseTask):
         # pd controller
         actions_scaled = actions[:, :12] * self.cfg.control.action_scale
         actions_scaled[:, [0, 3, 6, 9]] *= self.cfg.control.hip_scale_reduction  # scale down hip flexion range
+        #if self.cfg.control.override_joint_action:
+        #    actions_scaled[:, self.cfg.control.override_action_index] = 0
 
         if self.cfg.domain_rand.randomize_lag_timesteps:
             self.lag_buffer = self.lag_buffer[1:] + [actions_scaled.clone()]
             self.joint_pos_target = self.lag_buffer[0] + self.default_dof_pos
         else:
-            self.joint_pos_target = actions_scaled + self.default_dof_pos
+            self.joint_pos_target = actions_scaled + self.default_dof_pos # TODO this should be overrided
+
+        if self.cfg.control.override_joint_action:
+            self.joint_pos_target[:, self.cfg.control.override_action_index] = self.cfg.control.override_action_value
 
         control_type = self.cfg.control.control_type
 
@@ -943,6 +948,8 @@ class LeggedRobot(BaseTask):
             raise NameError(f"Unknown controller type: {control_type}")
 
         torques = torques * self.motor_strengths
+        if self.cfg.control.override_torque:
+            torques[self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
 
     def _reset_dofs(self, env_ids, cfg):
@@ -1234,6 +1241,7 @@ class LeggedRobot(BaseTask):
                 if self.cfg.control.control_type in ["P", "V"]:
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
         self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+        print(f"names: {self.dof_names}") # TODO remove, debug
 
         if self.cfg.control.control_type == "actuator_net":
             actuator_path = f'{os.path.dirname(os.path.dirname(os.path.realpath(__file__)))}/../../resources/actuator_nets/unitree_go1.pt'

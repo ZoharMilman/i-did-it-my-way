@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+from config_env import config_env
+
+
 def train_go1(headless=True):
 
     import isaacgym
@@ -204,7 +208,9 @@ def train_go1(headless=True):
     Cfg.commands.binary_phases = True
     Cfg.commands.gaitwise_curricula = True
 
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
+    config_env(Cfg)
+
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
 
     # log the experiment parameters
     logger.log_params(AC_Args=vars(AC_Args), PPO_Args=vars(PPO_Args), RunnerArgs=vars(RunnerArgs),
@@ -253,4 +259,4 @@ if __name__ == '__main__':
                 """, filename=".charts.yml", dedent=True)
 
     # to see the environment rendering, set headless=False
-    train_go1(headless=False)
+    train_go1(headless=True)

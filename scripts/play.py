@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import isaacgym
 
 assert isaacgym
@@ -13,6 +14,8 @@ from go1_gym.envs.go1.go1_config import config_go1
 from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
 
 from tqdm import tqdm
+
+from scripts.config_env import config_env
 
 def load_policy(logdir):
     body = torch.jit.load(logdir + '/checkpoints/body_latest.jit')
@@ -71,6 +74,9 @@ def load_env(label, headless=False):
     Cfg.domain_rand.lag_timesteps = 6
     Cfg.domain_rand.randomize_lag_timesteps = True
     Cfg.control.control_type = "actuator_net"
+
+    # our part
+    config_env(Cfg)
 
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 

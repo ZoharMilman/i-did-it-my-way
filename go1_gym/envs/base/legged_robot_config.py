@@ -207,6 +207,14 @@ class Cfg(PrefixProto, cli=False):
         default_joint_angles = {"joint_a": 0., "joint_b": 0.}
 
     class control(PrefixProto, cli=False):
+        # Solution 2 - override the actions\torques:
+        override_joint_action = False # NOTE yoav: set the relevant joint action as zero
+        override_action_index = 0 # TODO insert
+        override_action_value = 0 # TODO
+        override_torque = False # action sets the position, here we set force
+        override_torque_index = 0 # TODO insert
+        override_torque_value = 0 # TODO insert
+        # original parameters:
         control_type = 'actuator_net' #'P'  # P: position, V: velocity, T: torques
         # PD Drive parameters:
         stiffness = {'joint_a': 10.0, 'joint_b': 15.}  # [N*m/rad]
@@ -270,6 +278,10 @@ class Cfg(PrefixProto, cli=False):
         lag_timesteps = 6
 
     class rewards(PrefixProto, cli=False):
+        # reward_fixed_leg = False # use scales instead
+        fixed_leg_dof_indices = range(3)
+        fixed_leg_dof_target  = 0  # TODO can we use vector? dof_pos is a matrix
+        # original params
         only_positive_rewards = True  # if true negative total rewards are clipped at zero (avoids early termination problems)
         only_positive_rewards_ji22_style = False
         sigma_rew_neg = 5
@@ -294,7 +306,10 @@ class Cfg(PrefixProto, cli=False):
         gait_vel_sigma = 0.5
         footswing_height = 0.09
 
+
     class reward_scales(ParamsProto, cli=False):
+        fixed_leg_torques = 0.0
+        fixed_leg = 0.0  # TODO set high
         termination = -0.0
         tracking_lin_vel = 1.0
         tracking_ang_vel = 0.5
