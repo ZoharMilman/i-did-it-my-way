@@ -7,6 +7,7 @@ import numpy as np
 
 import glob
 import pickle as pkl
+import os.path
 
 from go1_gym.envs import *
 from go1_gym.envs.base.legged_robot_config import Cfg
@@ -33,8 +34,13 @@ def load_policy(logdir):
 
 
 def load_env(label, headless=False):
-    dirs = glob.glob(f"../runs/{label}/*")
-    logdir = sorted(dirs)[0]
+    if os.path.isdir("./.git"):
+        dirs = glob.glob(f"./runs/{label}/*")
+    else:
+        dirs = glob.glob(f"../runs/{label}/*")
+    print("earliest: %s" % sorted(dirs)[0])
+    print("selected: %s" % sorted(dirs)[-1])
+    logdir = sorted(dirs)[-1]# [0]
 
     with open(logdir + "/parameters.pkl", 'rb') as file:
         pkl_cfg = pkl.load(file)
@@ -101,6 +107,7 @@ def play_go1(headless=True):
     import os
 
     label = "gait-conditioned-agility/pretrain-v0/train"
+    label = "gait-conditioned-agility/2*/train"
 
     env, policy = load_env(label, headless=headless)
 
@@ -146,6 +153,8 @@ def play_go1(headless=True):
 
     # plot target and measured forward velocity
     from matplotlib import pyplot as plt
+    import matplotlib
+    matplotlib.use('TKAgg')
     fig, axs = plt.subplots(2, 1, figsize=(12, 5))
     axs[0].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), measured_x_vels, color='black', linestyle="-", label="Measured")
     axs[0].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), target_x_vels, color='black', linestyle="--", label="Desired")
@@ -154,10 +163,11 @@ def play_go1(headless=True):
     axs[0].set_xlabel("Time (s)")
     axs[0].set_ylabel("Velocity (m/s)")
 
-    axs[1].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), joint_positions, linestyle="-", label="Measured")
+    axs[1].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), joint_positions[:,:6], linestyle="-", label=[str(i) for i in range(6)])
     axs[1].set_title("Joint Positions")
     axs[1].set_xlabel("Time (s)")
     axs[1].set_ylabel("Joint Position (rad)")
+    plt.legend()
 
     plt.tight_layout()
     plt.show()
