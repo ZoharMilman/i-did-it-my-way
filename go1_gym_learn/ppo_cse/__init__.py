@@ -64,6 +64,7 @@ class Runner:
     def __init__(self, env, device='cpu'):
         from .ppo import PPO
 
+        print("ppo_cse: Rennner.init start")
         self.device = device
         self.env = env
 
@@ -131,6 +132,7 @@ class Runner:
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
+        print(__name__ + ": start iterate")
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
@@ -247,11 +249,11 @@ class Runner:
                     traced_script_body_module = torch.jit.script(body_model)
                     traced_script_body_module.save(body_path)
 
-                    logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
-                    logger.upload_file(file_path=body_path, target_path=f"checkpoints/", once=False)
+                    logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/")#, once=False) TODO why broken?
+                    logger.upload_file(file_path=body_path, target_path=f"checkpoints/")#, once=False)
 
             self.current_learning_iteration += num_learning_iterations
-
+        print("end iterate")
         with logger.Sync():
             logger.torch_save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
             logger.duplicate(f"checkpoints/ac_weights_{it:06d}.pt", f"checkpoints/ac_weights_last.pt")
@@ -270,11 +272,14 @@ class Runner:
             traced_script_body_module = torch.jit.script(body_model)
             traced_script_body_module.save(body_path)
 
-            logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
-            logger.upload_file(file_path=body_path, target_path=f"checkpoints/", once=False)
+            print("log")
+            logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/")#, once=False) TODO
+            logger.upload_file(file_path=body_path, target_path=f"checkpoints/")#, once=False)
 
 
     def log_video(self, it):
+        # return  # ignore video
+        print("save vid")
         if it - self.last_recording_it >= RunnerArgs.save_video_interval:
             self.env.start_recording()
             if self.env.num_eval_envs > 0:

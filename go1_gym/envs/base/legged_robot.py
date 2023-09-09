@@ -31,6 +31,7 @@ class LeggedRobot(BaseTask):
             device_id (int): 0, 1, ...
             headless (bool): Run without rendering if True
         """
+        print("init robot")
         self.cfg = cfg
         self.eval_cfg = eval_cfg
         self.sim_params = sim_params
@@ -41,7 +42,9 @@ class LeggedRobot(BaseTask):
         if eval_cfg is not None: self._parse_cfg(eval_cfg)
         self._parse_cfg(self.cfg)
 
+        print("call super")
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless, self.eval_cfg)
+        print("robot init next")
 
         self._init_command_distribution(torch.arange(self.num_envs, device=self.device))
 

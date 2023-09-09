@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from config_env import config_env
+from config_env import config_env, config_log
 
 
 def train_go1(headless=True):
-
+    print("train.py.train entered")
     import isaacgym
     assert isaacgym
     import torch
@@ -20,6 +20,7 @@ def train_go1(headless=True):
     from go1_gym_learn.ppo_cse.ppo import PPO_Args
     from go1_gym_learn.ppo_cse import RunnerArgs
 
+    print("done imports")
     config_go1(Cfg)
 
     Cfg.commands.num_lin_vel_bins = 30
@@ -143,8 +144,8 @@ def train_go1(headless=True):
     Cfg.rewards.kappa_gait_probs = 0.07
     Cfg.rewards.gait_force_sigma = 100.
     Cfg.rewards.gait_vel_sigma = 10.
-    Cfg.reward_scales.tracking_contacts_shaped_force = 4.0
-    Cfg.reward_scales.tracking_contacts_shaped_vel = 4.0
+    #Cfg.reward_scales.tracking_contacts_shaped_force = 4.0  # NOTE: removed to check if cause the robot to freeze
+    #Cfg.reward_scales.tracking_contacts_shaped_vel = 4.0
     Cfg.reward_scales.collision = -5.0
 
     Cfg.rewards.reward_container_name = "CoRLRewards"
@@ -209,16 +210,18 @@ def train_go1(headless=True):
     Cfg.commands.gaitwise_curricula = True
 
     config_env(Cfg)
-
+    print("done config, init env")
     env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
-
+    print("log n wrap")
     # log the experiment parameters
     logger.log_params(AC_Args=vars(AC_Args), PPO_Args=vars(PPO_Args), RunnerArgs=vars(RunnerArgs),
                       Cfg=vars(Cfg))
-
+    config_log(logger, env.cfg)
     env = HistoryWrapper(env)
     gpu_id = 0
+    print("init runner")
     runner = Runner(env, device=f"cuda:{gpu_id}")
+    print(__name__+": runner.learn()")
     runner.learn(num_learning_iterations=100000, init_at_random_ep_len=True, eval_freq=100)
 
 
