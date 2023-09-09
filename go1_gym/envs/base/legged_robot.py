@@ -952,7 +952,7 @@ class LeggedRobot(BaseTask):
 
         torques = torques * self.motor_strengths
         if self.cfg.control.override_torque:
-            torques[self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
+            torques[:,self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
 
     def _reset_dofs(self, env_ids, cfg):

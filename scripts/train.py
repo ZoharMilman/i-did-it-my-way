@@ -222,7 +222,9 @@ def train_go1(headless=True):
     print("init runner")
     runner = Runner(env, device=f"cuda:{gpu_id}")
     print(__name__+": runner.learn()")
-    runner.learn(num_learning_iterations=100000, init_at_random_ep_len=True, eval_freq=100)
+    num_of_iterations = 100000 #35000 # was 100,000
+    print("running for %s iterations" % num_of_iterations)
+    runner.learn(num_learning_iterations=num_of_iterations, init_at_random_ep_len=True, eval_freq=100)
 
 
 if __name__ == '__main__':

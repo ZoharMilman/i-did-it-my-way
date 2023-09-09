@@ -239,18 +239,24 @@ class Runner:
 
                     os.makedirs(path, exist_ok=True)
 
-                    adaptation_module_path = f'{path}/adaptation_module_latest.jit'
+                    adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
+                    adaptation_module_path            = f'{path}/adaptation_module_latest.jit'
                     adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
                     traced_script_adaptation_module = torch.jit.script(adaptation_module)
+                    traced_script_adaptation_module.save(adaptation_module_checkpoint_path)
                     traced_script_adaptation_module.save(adaptation_module_path)
 
-                    body_path = f'{path}/body_latest.jit'
+                    body_checkpoint_path = f'{path}/body_{it:06d}.jit'
+                    body_path            = f'{path}/body_latest.jit'
                     body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
                     traced_script_body_module = torch.jit.script(body_model)
                     traced_script_body_module.save(body_path)
+                    traced_script_body_module.save(body_checkpoint_path)
 
                     logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/")#, once=False) TODO why broken?
+                    logger.upload_file(file_path=adaptation_module_checkpoint_path, target_path=f"checkpoints/")#, once=False) TODO why broken?
                     logger.upload_file(file_path=body_path, target_path=f"checkpoints/")#, once=False)
+                    logger.upload_file(file_path=body_checkpoint_path, target_path=f"checkpoints/")#, once=False)
 
             self.current_learning_iteration += num_learning_iterations
         print("end iterate")
