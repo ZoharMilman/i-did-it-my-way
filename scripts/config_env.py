@@ -2,14 +2,14 @@ def config_env(Cfg):
     """ Test our new parameters """
     # 0. common
     import numpy as np
-    relevant_joints = range(3)
-    positional_target = 0* np.array([0, 1, -2])
+    relevant_joints = [2,] # [0,1,2]
+    positional_target = -100 #np.array([0, 1, -2])
 
     # 1. positional action override - do not really set the position, uses the original controller to decide the torque
-    Cfg.control.override_joint_action = True  #  True
+    Cfg.control.override_joint_action = False  #  True
     # # 2. torque action override
-    #Cfg.control.override_torque = True
-    #Cfg.control.override_torque_value = 0  # zero to neutral, +-const to force extreme position?
+    Cfg.control.override_torque = True
+    Cfg.control.override_torque_value = -100  # zero to neutral, +-const to force extreme position?
 
     # # rewards (instead of selecting  the action, set a reward). pro: doesnt need to know how much force to apply
     # # 3. positional reward
@@ -34,13 +34,13 @@ def config_log(logger, Cfg):
             f"Of indices: {Cfg.control.override_torque_index} \n" +
             f"To: {Cfg.control.override_torque_value} \n\n",
             filename=".enfoce_summary.txt")
-    elif Cfg.control.override_joint_action:
+    if Cfg.control.override_joint_action:
         logger.log_text(
             f"Action Enforcing. \n" +
             f"Of indices: {Cfg.control.override_action_index} \n" +
             f"To: {Cfg.control.override_joint_value} \n\n",
             filename=".enfoce_summary.txt")
-    else:
+    if not Cfg.control.override_torque and not Cfg.control.override_joint_action:
         logger.log_text(
             f"Original. Not Enforcing. \n\n",
             filename=".enfoce_summary.txt")

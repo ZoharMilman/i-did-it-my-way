@@ -18,7 +18,20 @@ from tqdm import tqdm
 
 from scripts.config_env import config_env
 
-def load_policy(logdir):
+
+def get_logdir(pretrain=False):
+    label = "gait-conditioned-agility/%s/train" % ( "pretrain-v0" if pretrain else "2*")
+
+    if os.path.isdir("./.git"):
+        dirs = glob.glob(f"./runs/{label}/*")
+    else:
+        dirs = glob.glob(f"../runs/{label}/*")
+    logdir = sorted(dirs)[-1]  # [0]
+    print("selected run: %s" % logdir)
+    return logdir
+
+
+def load_policy(logdir=get_logdir()):
     body = torch.jit.load(logdir + '/checkpoints/body_latest.jit')
     import os
     adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_latest.jit')
@@ -33,15 +46,8 @@ def load_policy(logdir):
     return policy
 
 
-def load_env(label, headless=False):
-    if os.path.isdir("./.git"):
-        dirs = glob.glob(f"./runs/{label}/*")
-    else:
-        dirs = glob.glob(f"../runs/{label}/*")
-    print("earliest: %s" % sorted(dirs)[0])
-    print("selected: %s" % sorted(dirs)[-1])
-    logdir = sorted(dirs)[-1]# [0]
-
+def load_env(headless=False):
+    logdir = get_logdir()
     with open(logdir + "/parameters.pkl", 'rb') as file:
         pkl_cfg = pkl.load(file)
         print(pkl_cfg.keys())
@@ -106,10 +112,7 @@ def play_go1(headless=True):
     import glob
     import os
 
-    label = "gait-conditioned-agility/pretrain-v0/train"
-    label = "gait-conditioned-agility/2*/train"
-
-    env, policy = load_env(label, headless=headless)
+    env, policy = load_env(headless=headless)
 
     num_eval_steps = 250
     gaits = {"pronking": [0, 0, 0],
