@@ -19,9 +19,13 @@ from tqdm import tqdm
 from scripts.config_env import config_env
 
 def load_policy_it(logdir, it):
-    body = torch.jit.load(logdir + f'/checkpoints/body_{it:06d}.jit')
     import os
-    adaptation_module = torch.jit.load(logdir + f'/checkpoints/adaptation_module_{it:06d}.jit')
+    if it >= 0:
+        body = torch.jit.load(logdir + f'/checkpoints/body_{it:06d}.jit')
+        adaptation_module = torch.jit.load(logdir + f'/checkpoints/adaptation_module_{it:06d}.jit')
+    else:
+        body = torch.jit.load(logdir + '/checkpoints/body_latest.jit')
+        adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_latest.jit')
 
     def policy(obs, info={}):
         i = 0
@@ -33,11 +37,11 @@ def load_policy_it(logdir, it):
     return policy
 
 
-def load_env_it(label, it, headless=False):
+def load_env_it(label, time, it, headless=False):
     if os.path.isdir("./.git"):
-        dirs = glob.glob(f"./runs/{label}/*")
+        dirs = glob.glob(f"./runs/{label}/{time}")
     else:
-        dirs = glob.glob(f"../runs/{label}/*")
+        dirs = glob.glob(f"../runs/{label}/{time}")
     print("earliest: %s" % sorted(dirs)[0])
     print("selected: %s" % sorted(dirs)[-1])
     
@@ -90,15 +94,24 @@ def load_env_it(label, it, headless=False):
     env = HistoryWrapper(env)
 
     # load policy
-    from ml_logger import logger
-    from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
-
     policy = load_policy_it(logdir, it)
 
     return env, policy
 
 
-def play_go1_it(it, headless=True):
+def play_go1_it(it: int = -1, date: str = "2*", time: str = "*", headless=True):
+    """
+    dates can be:
+        "2*" for newest,
+        "pretrain-v0" for original,
+        "2023-09-01" for a specific one
+
+    times are in the format:
+        "*" for newest,
+        "085728.400006" for specific
+
+    for the latest iteration, just pass a negative iteration number
+    """
     from ml_logger import logger
 
     from pathlib import Path
@@ -106,11 +119,9 @@ def play_go1_it(it, headless=True):
     import glob
     import os
 
-    label = "gait-conditioned-agility/pretrain-v0/train"
-    label = "gait-conditioned-agility/2*/train"
-    # label = "gait-conditioned-agility/2023-09-01/train" # if we want old date 
+    label = f"gait-conditioned-agility/{date}/train*"  # both train&train_many
 
-    env, policy = load_env_it(label, it, headless=headless)
+    env, policy = load_env_it(label, time, it, headless=headless)
 
     num_eval_steps = 250
     gaits = {"pronking": [0, 0, 0],
@@ -175,8 +186,10 @@ def play_go1_it(it, headless=True):
 
 
 if __name__ == '__main__':
-    #dt = input("insert date in the format 2023-09-01:")
-    #rn = input("insert run number in the format 125024.603673:")  # TODO use dt and rn
-    iteration = int(input("insert iteration number:"))
+    print("insert date/runtime and then the iteration number (leave empty for newest):")
+    dateNtime = input()
+    date, time = dateNtime.split("/") if dateNtime else ("2*", "*")
+    iteration = input()
+    iteration = int(iteration) if len(iteration) else -1
     # to see the environment rendering, set headless=False
-    play_go1_it(iteration, headless=False)
+    play_go1_it(date=date, time=time, it=iteration, headless=False)
