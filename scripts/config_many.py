@@ -9,7 +9,7 @@
 #     cfg_list.append({"joints":[0,1,2], "value": complex_value, "is_torque": False})
 
 # -- minimal list
-cfg_list = [{"joints": j, "value": 0, "is_torque": False} for j in [[], [0,1,2], [2,], [1,], [0,]] ] 
+cfg_list = [{"joints": j, "value": 0, "is_torque": False} for j in [[0,1,2], [2,], [1,], [0,]] ] # [] 
 
 cfg_num = len(cfg_list)
 
@@ -44,7 +44,7 @@ def config_env(Cfg, cfg_idx=0):
 
 def config_log(logger, Cfg):
     """ write summary """
-    file = "enfoce_summary.txt"
+    file = "enforce_summary.txt"
     if Cfg.control.override_torque:
         logger.log_text(
             f"Torque Enforcing. \n" +

@@ -30,6 +30,7 @@ class BaseTask(gym.Env):
             self.device = self.sim_device
         else:
             self.device = 'cpu'
+        print(self.device)
 
         # graphics device for rendering, -1 for no rendering
         self.graphics_device_id = self.sim_device_id
@@ -64,12 +65,15 @@ class BaseTask(gym.Env):
         self.privileged_obs_buf = torch.zeros(self.num_envs, self.num_privileged_obs, device=self.device,
                                               dtype=torch.float)
         # self.num_privileged_obs = self.num_obs
+        print("still alive")
 
         self.extras = {}
 
         # create envs, sim and viewer
         self.create_sim()
+        print("wow?")
         self.gym.prepare_sim(self.sim)
+        print("wow")
 
         # todo: read from config
         self.enable_viewer_sync = True
@@ -84,6 +88,7 @@ class BaseTask(gym.Env):
                 self.viewer, gymapi.KEY_ESCAPE, "QUIT")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_V, "toggle_viewer_sync")
+        print("wow2")
 
     def get_observations(self):
         return self.obs_buf

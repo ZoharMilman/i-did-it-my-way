@@ -18,6 +18,8 @@ from tqdm import tqdm
 
 from scripts.config_env import config_env
 
+RUNS_FOLDER_NAME = "runs*"  # "runs" or "runs_azure"
+
 def load_policy_it(logdir, it):
     import os
     if it >= 0:
@@ -39,9 +41,9 @@ def load_policy_it(logdir, it):
 
 def load_env_it(label, time, it, headless=False):
     if os.path.isdir("./.git"):
-        dirs = glob.glob(f"./runs/{label}/{time}")
+        dirs = glob.glob(f"./{RUNS_FOLDER_NAME}/{label}/{time}")
     else:
-        dirs = glob.glob(f"../runs/{label}/{time}")
+        dirs = glob.glob(f"../{RUNS_FOLDER_NAME}/{label}/{time}")
     print("earliest: %s" % sorted(dirs)[0])
     print("selected: %s" % sorted(dirs)[-1])
     
@@ -86,7 +88,7 @@ def load_env_it(label, time, it, headless=False):
     Cfg.control.control_type = "actuator_net"
 
     # our part
-    config_env(Cfg)
+    #config_env(Cfg)  todo wrong since using config_many, also reading from pkl anyway
 
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
@@ -188,7 +190,9 @@ def play_go1_it(it: int = -1, date: str = "2*", time: str = "*", headless=True):
 if __name__ == '__main__':
     print("insert date/runtime and then the iteration number (leave empty for newest):")
     dateNtime = input()
-    date, time = dateNtime.split("/") if dateNtime else ("2*", "*")
+    dateNtime = dateNtime.split("/") if dateNtime else ("2*", "*")
+    date = dateNtime[0]
+    time = dateNtime[-1]  # allows paths as: 2024-03-03/train/171750.264034
     iteration = input()
     iteration = int(iteration) if len(iteration) else -1
     # to see the environment rendering, set headless=False

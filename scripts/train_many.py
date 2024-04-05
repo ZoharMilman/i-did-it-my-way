@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-from config_many import config_env, config_log, cfg_num
+from config_many import cfg_num
 from tqdm import tqdm
 
 
 def train_go1(headless=True, cfg_idx=0):
     pre_run()
     print("train.py.train entered")
+    from config_many import config_env, config_log
     import isaacgym
     assert isaacgym
     import torch
@@ -26,7 +27,11 @@ def train_go1(headless=True, cfg_idx=0):
     config_default(Cfg)
     config_env(Cfg, cfg_idx)
     print("done config, init env")
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
+    try:
+        env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
+    except Exception as e:
+        print("Error")
+        print(e)
     print("log n wrap")
     # log the experiment parameters
     logger.log_params(AC_Args=vars(AC_Args), PPO_Args=vars(PPO_Args), RunnerArgs=vars(RunnerArgs),
@@ -280,9 +285,9 @@ def pre_run():
 if __name__ == '__main__':
     from multiprocessing import Process
     # to see the environment rendering, set headless=False
-    for idx in tqdm(range(cfg_num), desc="training on configs:"):
+    for idx in tqdm(range(cfg_num), desc="training on configs"):
         p = Process(target=train_go1,args=(True,idx))
-        # train_go1(headless=True, cfg_idx=idx)
         p.start()
         p.join()
+        # train_go1(headless=True, cfg_idx=idx)
         print(f"finished train number {idx}")
