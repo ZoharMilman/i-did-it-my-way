@@ -161,8 +161,8 @@ def config_default(Cfg):
     Cfg.reward_scales.feet_clearance = -0.0
     Cfg.reward_scales.feet_clearance_cmd = -0.0
     Cfg.reward_scales.feet_clearance_cmd_linear = -30.0
-    Cfg.reward_scales.orientation = -5.0 # edited
-    Cfg.reward_scales.orientation_control = -50.0 # edited
+    Cfg.reward_scales.orientation = -0.0 # restored
+    Cfg.reward_scales.orientation_control = -5.0 # restored
     Cfg.reward_scales.tracking_stance_width = -0.0
     Cfg.reward_scales.tracking_stance_length = -0.0
     Cfg.reward_scales.lin_vel_z = -0.02

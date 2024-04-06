@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-import isaacgym
+from multiprocessing import Process, set_start_method
 
-assert isaacgym
-import torch
 import numpy as np
 
 import glob
@@ -21,6 +19,10 @@ from scripts.config_env import config_env
 RUNS_FOLDER_NAME = "runs*"  # "runs" or "runs_azure"
 
 def load_policy_it(logdir, it):
+    import isaacgym
+    assert isaacgym
+    import torch
+
     import os
     if it >= 0:
         body = torch.jit.load(logdir + f'/checkpoints/body_{it:06d}.jit')
@@ -114,6 +116,10 @@ def play_go1_it(it: int = -1, date: str = "2*", time: str = "*", headless=True):
 
     for the latest iteration, just pass a negative iteration number
     """
+    import isaacgym
+    assert isaacgym
+    import torch
+
     from ml_logger import logger
 
     from pathlib import Path
@@ -188,12 +194,17 @@ def play_go1_it(it: int = -1, date: str = "2*", time: str = "*", headless=True):
 
 
 if __name__ == '__main__':
-    print("insert date/runtime and then the iteration number (leave empty for newest):")
+    print("insert date/runtime and then the iteration number(s) (leave empty for newest):")
     dateNtime = input()
     dateNtime = dateNtime.split("/") if dateNtime else ("2*", "*")
     date = dateNtime[0]
     time = dateNtime[-1]  # allows paths as: 2024-03-03/train/171750.264034
-    iteration = input()
-    iteration = int(iteration) if len(iteration) else -1
-    # to see the environment rendering, set headless=False
-    play_go1_it(date=date, time=time, it=iteration, headless=False)
+    iterations = input().split(",")
+    set_start_method('spawn')
+    for iteration in iterations:
+        iteration = int(iteration) if len(iteration) else -1
+        print(f"it: {iteration}")
+        p = Process(target=play_go1_it, args=(iteration, date, time, False))
+        p.start()
+        p.join()
+        #play_go1_it(date=date, time=time, it=iteration, headless=False)
