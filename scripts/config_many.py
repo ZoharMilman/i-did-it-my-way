@@ -9,8 +9,9 @@
 #     cfg_list.append({"joints":[0,1,2], "value": complex_value, "is_torque": False})
 
 # -- minimal list
-cfg_list = [{"joints": j, "value": 0, "is_torque": False} for j in [[0,1,2], [2,], [1,], [0,]] ] # [] 
-
+#cfg_list = [{"joints": j, "value": 0, "is_torque": False} for j in [[0,1,2], [2,], [1,], [0,]] ] # [] 
+cfg_list = [{"joints": [0,1,2], "value": val, "is_torque": False} for val in [-100, 100]]
+cfg_list.append({"joints": [], "value": 0, "is_torque": False})
 cfg_num = len(cfg_list)
 
 

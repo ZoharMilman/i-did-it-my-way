@@ -498,7 +498,7 @@ class LeggedRobot(BaseTask):
         """
         print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh")
         self.up_axis_idx = 2  # 2 for z, 1 for y -> adapt gravity accordingly
-        self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine,
+        self.sim = self.gym.create_sim(self.sim_device_id, -1, self.physics_engine,
                                        self.sim_params)
 
         mesh_type = self.cfg.terrain.mesh_type
