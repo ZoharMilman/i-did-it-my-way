@@ -73,3 +73,6 @@ tmp
 scripts/wandb
 scripts/dogrobot
 scripts/checkpoints
+
+# isaacgym
+isaacgym

@@ -256,6 +256,6 @@ if __name__ == '__main__':
     # wandb.init(project="robot-training", name=stem, sync_tensorboard=True)
 
     # to see the environment rendering, set headless=False
-    train_go1(headless=True)
+    train_go1(headless=False)
 
 
