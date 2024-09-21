@@ -496,10 +496,16 @@ class LeggedRobot(BaseTask):
     def create_sim(self):
         """ Creates simulation, terrain and evironments
         """
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh")
+        # print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh")
         self.up_axis_idx = 2  # 2 for z, 1 for y -> adapt gravity accordingly
-        self.sim = self.gym.create_sim(self.sim_device_id, -1, self.physics_engine,
+        print("Trying to create_sim with graphics device: ", self.graphics_device_id)
+        # self.sim = self.gym.create_sim(self.sim_device_id, -1, self.physics_engine,
+        #                                self.sim_params)
+
+        self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine,
                                        self.sim_params)
+
+        print('Sim device id is: ', self.sim_device_id)
 
         mesh_type = self.cfg.terrain.mesh_type
         if mesh_type in ['heightfield', 'trimesh']:
@@ -1602,10 +1608,18 @@ class LeggedRobot(BaseTask):
                                                                                         termination_contact_names[i])
         # if recording video, set up camera
         if self.cfg.env.record_video:
+            print("Trying to set up camera for record...")
             self.camera_props = gymapi.CameraProperties()
             self.camera_props.width = 360
             self.camera_props.height = 240
-            self.rendering_camera = self.gym.create_camera_sensor(self.envs[0], self.camera_props)
+            self.camera_props.enable_tensors=False
+            
+            print("ENV 0:", self.envs[0])
+            print("Number of training environments:", self.num_train_envs)
+
+            self.rendering_camera = self.gym.create_camera_sensor(self.envs[0], self.camera_props) # Problem here, returns -1
+            # print("ENV: ", self.envs[0])
+
             self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(1.5, 1, 3.0),
                                          gymapi.Vec3(0, 0, 0))
             if self.eval_cfg is not None:
@@ -1638,6 +1652,10 @@ class LeggedRobot(BaseTask):
                                          gymapi.Vec3(bx, by, bz))
             self.video_frame = self.gym.get_camera_image(self.sim, self.envs[0], self.rendering_camera,
                                                          gymapi.IMAGE_COLOR)
+            
+            if self.video_frame is None or len(self.video_frame) == 0:
+                print('ERROR: VIDEO FRAME EMPTY')
+                 
             self.video_frame = self.video_frame.reshape((self.camera_props.height, self.camera_props.width, 4))
             self.video_frames.append(self.video_frame)
 
