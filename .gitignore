@@ -68,3 +68,8 @@ docker/rsc
 *.jit
 tmp
 *.tar
+
+# wandb
+scripts/wandb
+scripts/dogrobot
+scripts/checkpoints
