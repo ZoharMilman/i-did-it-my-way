@@ -10,6 +10,8 @@ from params_proto import PrefixProto
 from .actor_critic import ActorCritic
 from .rollout_storage import RolloutStorage
 
+import wandb
+import numpy as np
 
 def class_to_dict(obj) -> dict:
     if not hasattr(obj, "__dict__"):
@@ -48,7 +50,7 @@ class RunnerArgs(PrefixProto, cli=False):
 
     # logging
     save_interval = 400  # check for potential saves every this many iterations
-    save_video_interval = 100
+    save_video_interval = 1
     log_freq = 10
 
     # load and resume
@@ -105,25 +107,26 @@ class Runner:
 
         self.env.reset()
 
-    def learn(self, num_learning_iterations, init_at_random_ep_len=False, eval_freq=100, curriculum_dump_freq=500, eval_expert=False):
-        from ml_logger import logger
-        # initialize writer
-        assert logger.prefix, "you will overwrite the entire instrument server"
 
-        logger.start('start', 'epoch', 'episode', 'run', 'step')
+    def learn(self, num_learning_iterations, init_at_random_ep_len=False, eval_freq=100, curriculum_dump_freq=500, eval_expert=False):
+        import wandb
+        
+        print('---------------------------USING WANDB--------------------------')
+
+        # Initialize wandb
+        # wandb.init(project="gait-conditioned-agility", config=self.ppo_args)
 
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf,
-                                                             high=int(self.env.max_episode_length))
+                                                            high=int(self.env.max_episode_length))
 
         # split train and test envs
         num_train_envs = self.env.num_train_envs
 
         obs_dict = self.env.get_observations()  # TODO: check, is this correct on the first step?
         obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict["obs_history"]
-        obs, privileged_obs, obs_history = obs.to(self.device), privileged_obs.to(self.device), obs_history.to(
-            self.device)
-        self.alg.actor_critic.train()  # switch to train mode (for dropout for example)
+        obs, privileged_obs, obs_history = obs.to(self.device), privileged_obs.to(self.device), obs_history.to(self.device)
+        self.alg.actor_critic.train()  # switch to train mode (for dropout, etc.)
 
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
@@ -136,40 +139,37 @@ class Runner:
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
+            print("ITERATION: ", it)
+
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
-                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs],
-                                                 obs_history[:num_train_envs])
+                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs], obs_history[:num_train_envs])
+
                     if eval_expert:
-                        actions_eval = self.alg.actor_critic.act_teacher(obs_history[num_train_envs:],
-                                                                         privileged_obs[num_train_envs:])
+                        actions_eval = self.alg.actor_critic.act_teacher(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
                     else:
                         actions_eval = self.alg.actor_critic.act_student(obs_history[num_train_envs:])
+
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
                     obs_dict, rewards, dones, infos = ret
-                    obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict[
-                        "obs_history"]
+                    obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict["obs_history"]
 
-                    obs, privileged_obs, obs_history, rewards, dones = obs.to(self.device), privileged_obs.to(
-                        self.device), obs_history.to(self.device), rewards.to(self.device), dones.to(self.device)
+                    obs, privileged_obs, obs_history, rewards, dones = obs.to(self.device), privileged_obs.to(self.device), obs_history.to(self.device), rewards.to(self.device), dones.to(self.device)
+
                     self.alg.process_env_step(rewards[:num_train_envs], dones[:num_train_envs], infos)
 
                     if 'train/episode' in infos:
-                        with logger.Prefix(metrics="train/episode"):
-                            logger.store_metrics(**infos['train/episode'])
+                        wandb.log(infos['train/episode'], step=it)
 
                     if 'eval/episode' in infos:
-                        with logger.Prefix(metrics="eval/episode"):
-                            logger.store_metrics(**infos['eval/episode'])
+                        wandb.log(infos['eval/episode'], step=it)
 
                     if 'curriculum' in infos:
-
                         cur_reward_sum += rewards
                         cur_episode_length += 1
 
                         new_ids = (dones > 0).nonzero(as_tuple=False)
-
                         new_ids_train = new_ids[new_ids < num_train_envs]
                         rewbuffer.extend(cur_reward_sum[new_ids_train].cpu().numpy().tolist())
                         lenbuffer.extend(cur_episode_length[new_ids_train].cpu().numpy().tolist())
@@ -193,94 +193,75 @@ class Runner:
                 self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
 
                 if it % curriculum_dump_freq == 0:
-                    logger.save_pkl({"iteration": it,
-                                     **caches.slot_cache.get_summary(),
-                                     **caches.dist_cache.get_summary()},
-                                    path=f"curriculum/info.pkl", append=True)
+                    wandb.log({"curriculum_info_iteration": it,
+                            **caches.slot_cache.get_summary(),
+                            **caches.dist_cache.get_summary()})
 
                     if 'curriculum/distribution' in infos:
-                        logger.save_pkl({"iteration": it,
-                                         "distribution": distribution},
-                                         path=f"curriculum/distribution.pkl", append=True)
+                        wandb.log({"distribution": distribution}, step=it)
 
-            mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
+            # Update the model and record losses
+            (mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, 
+            mean_decoder_loss_student, mean_adaptation_module_test_loss, 
+            mean_decoder_test_loss, mean_decoder_test_loss_student) = self.alg.update()
+
             stop = time.time()
             learn_time = stop - start
 
-            logger.store_metrics(
-                # total_time=learn_time - collection_time,
-                time_elapsed=logger.since('start'),
-                time_iter=logger.split('epoch'),
-                adaptation_loss=mean_adaptation_module_loss,
-                mean_value_loss=mean_value_loss,
-                mean_surrogate_loss=mean_surrogate_loss,
-                mean_decoder_loss=mean_decoder_loss,
-                mean_decoder_loss_student=mean_decoder_loss_student,
-                mean_decoder_test_loss=mean_decoder_test_loss,
-                mean_decoder_test_loss_student=mean_decoder_test_loss_student,
-                mean_adaptation_module_test_loss=mean_adaptation_module_test_loss
-            )
+            wandb.log({
+                "time_elapsed": time.time() - wandb.run.start_time,
+                "time_iter": learn_time,
+                "adaptation_loss": mean_adaptation_module_loss,
+                "mean_value_loss": mean_value_loss,
+                "mean_surrogate_loss": mean_surrogate_loss,
+                "mean_decoder_loss": mean_decoder_loss,
+                "mean_decoder_loss_student": mean_decoder_loss_student,
+                "mean_decoder_test_loss": mean_decoder_test_loss,
+                "mean_decoder_test_loss_student": mean_decoder_test_loss_student,
+                "mean_adaptation_module_test_loss": mean_adaptation_module_test_loss
+            }, step=it)
 
-            if RunnerArgs.save_video_interval:
+            if it % RunnerArgs.save_video_interval == 0:
                 self.log_video(it)
 
             self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
-            if logger.every(RunnerArgs.log_freq, "iteration", start_on=1):
-                # if it % Config.log_freq == 0:
-                logger.log_metrics_summary(key_values={"timesteps": self.tot_timesteps, "iterations": it})
-                logger.job_running()
+
+            # Periodic logging and checkpoint saving
+            if it % RunnerArgs.log_freq == 0:
+                wandb.log({"timesteps": self.tot_timesteps, "iterations": it}, step=it)
 
             if it % RunnerArgs.save_interval == 0:
-                with logger.Sync():
-                    logger.torch_save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
-                    logger.duplicate(f"checkpoints/ac_weights_{it:06d}.pt", f"checkpoints/ac_weights_last.pt")
+                # Save checkpoints
+                torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
+                torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
 
-                    path = './tmp/legged_data'
+                # Save other modules as needed
+                path = './tmp/legged_data'
+                os.makedirs(path, exist_ok=True)
 
-                    os.makedirs(path, exist_ok=True)
+                adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
+                adaptation_module_path = f'{path}/adaptation_module_latest.jit'
+                adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
+                traced_script_adaptation_module = torch.jit.script(adaptation_module)
+                traced_script_adaptation_module.save(adaptation_module_checkpoint_path)
+                traced_script_adaptation_module.save(adaptation_module_path)
 
-                    adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
-                    adaptation_module_path            = f'{path}/adaptation_module_latest.jit'
-                    adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
-                    traced_script_adaptation_module = torch.jit.script(adaptation_module)
-                    traced_script_adaptation_module.save(adaptation_module_checkpoint_path)
-                    traced_script_adaptation_module.save(adaptation_module_path)
+                body_checkpoint_path = f'{path}/body_{it:06d}.jit'
+                body_path = f'{path}/body_latest.jit'
+                body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
+                traced_script_body_module = torch.jit.script(body_model)
+                traced_script_body_module.save(body_path)
+                traced_script_body_module.save(body_checkpoint_path)
 
-                    body_checkpoint_path = f'{path}/body_{it:06d}.jit'
-                    body_path            = f'{path}/body_latest.jit'
-                    body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
-                    traced_script_body_module = torch.jit.script(body_model)
-                    traced_script_body_module.save(body_path)
-                    traced_script_body_module.save(body_checkpoint_path)
+                # Use wandb for checkpoint tracking
+                wandb.save(adaptation_module_path)
+                wandb.save(adaptation_module_checkpoint_path)
+                wandb.save(body_path)
+                wandb.save(body_checkpoint_path)
 
-                    logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/")#, once=False) TODO why broken?
-                    logger.upload_file(file_path=adaptation_module_checkpoint_path, target_path=f"checkpoints/")#, once=False) TODO why broken?
-                    logger.upload_file(file_path=body_path, target_path=f"checkpoints/")#, once=False)
-                    logger.upload_file(file_path=body_checkpoint_path, target_path=f"checkpoints/")#, once=False)
-
-            self.current_learning_iteration += num_learning_iterations
-        print("end iterate")
-        with logger.Sync():
-            logger.torch_save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
-            logger.duplicate(f"checkpoints/ac_weights_{it:06d}.pt", f"checkpoints/ac_weights_last.pt")
-
-            path = './tmp/legged_data'
-
-            os.makedirs(path, exist_ok=True)
-
-            adaptation_module_path = f'{path}/adaptation_module_latest.jit'
-            adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
-            traced_script_adaptation_module = torch.jit.script(adaptation_module)
-            traced_script_adaptation_module.save(adaptation_module_path)
-
-            body_path = f'{path}/body_latest.jit'
-            body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
-            traced_script_body_module = torch.jit.script(body_model)
-            traced_script_body_module.save(body_path)
-
-            print("log")
-            logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/")#, once=False) TODO
-            logger.upload_file(file_path=body_path, target_path=f"checkpoints/")#, once=False)
+        self.current_learning_iteration += num_learning_iterations
+        print("Learning complete")
+        # wandb.finish()
 
 
     def log_video(self, it):
@@ -293,18 +274,29 @@ class Runner:
             print("START RECORDING")
             self.last_recording_it = it
 
+        # Get frames for the training environment
         frames = self.env.get_complete_frames()
+        print("FRAMES LENGTH: ", len(frames))
         if len(frames) > 0:
             self.env.pause_recording()
             print("LOGGING VIDEO")
-            logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
 
+            # Convert the frames to a video format wandb can handle
+            video_path = f"videos/{it:05d}.mp4"
+            fps = 1 / self.env.dt
+            wandb.log({"train_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
+
+        # Get frames for the evaluation environment if it exists
         if self.env.num_eval_envs > 0:
             frames = self.env.get_complete_frames_eval()
             if len(frames) > 0:
                 self.env.pause_recording_eval()
                 print("LOGGING EVAL VIDEO")
-                logger.save_video(frames, f"videos/{it:05d}_eval.mp4", fps=1 / self.env.dt)
+
+                # Convert the frames to a video format wandb can handle
+                eval_video_path = f"videos/{it:05d}_eval.mp4"
+                wandb.log({"eval_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
+
 
     def get_inference_policy(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
