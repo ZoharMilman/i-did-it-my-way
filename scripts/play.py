@@ -18,7 +18,6 @@ from tqdm import tqdm
 
 from scripts.config_env import config_env
 
-#work
 
 def get_logdir(pretrain=False):
     label = "gait-conditioned-agility/%s/train" % ( "pretrain-v0" if pretrain else "2*")

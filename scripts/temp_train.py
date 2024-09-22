@@ -238,7 +238,7 @@ def train_go1(headless=True):
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")
 
-    num_of_iterations = 100  # Adjust as needed
+    num_of_iterations = 5  # Adjust as needed
     print(f"Running for {num_of_iterations} iterations")
 
     # Start learning process

@@ -232,13 +232,17 @@ class Runner:
 
             if it % RunnerArgs.save_interval == 0:
                 # Save checkpoints
-                if os.path.exists("checkpoints/"):
-                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
-                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
+                ac_weights_checkpoint_path = f"checkpoints/ac_weights_{it:06d}.pt"
+                ac_weights_path = f"checkpoints/ac_weights_last.pt"
+                if os.path.exists(ac_weights_path):
+                    torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
+                    torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
+                    wandb
                 else:
                     os.makedirs("checkpoints/")
-                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
-                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
+                    torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
+                    torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
+                    
 
                 # Save other modules as needed
                 path = './tmp/legged_data'
@@ -259,6 +263,8 @@ class Runner:
                 traced_script_body_module.save(body_checkpoint_path)
 
                 # Use wandb for checkpoint tracking
+                wandb.save(ac_weights_path)
+                wandb.save(ac_weights_checkpoint_path)
                 wandb.save(adaptation_module_path)
                 wandb.save(adaptation_module_checkpoint_path)
                 wandb.save(body_path)
