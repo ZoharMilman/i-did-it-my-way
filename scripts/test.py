@@ -185,22 +185,33 @@ def run_env(render=False, headless=False):
     Cfg.domain_rand.randomize_lag_timesteps = True
     Cfg.control.control_type = "actuator_net"
 
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
     env.reset()
 
     if render and headless:
         img = env.render(mode="rgb_array")
-        plt.imshow(img)
-        plt.show()
+        print(img)
+        # plt.imshow(img)
+        plt.imsave('first_frame.png', img)
+        # plt.show()
         print("Show the first frame and exit.")
-        exit()
-
+        # exit()
+    
+    import imageio
+    import numpy as np
+    frames = []
     for i in trange(1000, desc="Running"):
+        print("------ITERATION ", i)
         actions = 0. * torch.ones(env.num_envs, env.num_actions, device=env.device)
         obs, rew, done, info = env.step(actions)
+        img = env.render(mode="rgb_array")
+        frames.append(np.array(img))  # Store the frame
 
-    print("Done")
-
+    if render and headless:
+        output_filename = 'environment_video.mp4'
+        imageio.mimsave(output_filename, frames, fps=30)
+    print("Done")   
+    
 
 if __name__ == '__main__':
-    run_env(render=True, headless=False)
+    run_env(render=True, headless=True)

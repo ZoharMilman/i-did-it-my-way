@@ -232,8 +232,13 @@ class Runner:
 
             if it % RunnerArgs.save_interval == 0:
                 # Save checkpoints
-                torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
-                torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
+                if os.path.exists("checkpoints/"):
+                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
+                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
+                else:
+                    os.makedirs("checkpoints/")
+                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_{it:06d}.pt")
+                    torch.save(self.alg.actor_critic.state_dict(), f"checkpoints/ac_weights_last.pt")
 
                 # Save other modules as needed
                 path = './tmp/legged_data'
