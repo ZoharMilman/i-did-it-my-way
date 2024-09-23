@@ -52,6 +52,7 @@ class RunnerArgs(PrefixProto, cli=False):
     save_interval = 400  # check for potential saves every this many iterations
     save_video_interval = 1
     log_freq = 10
+    inference_steps = 900 # save half minute video
 
     # load and resume
     resume = False
@@ -222,7 +223,8 @@ class Runner:
             }, step=it)
 
             if it % RunnerArgs.save_video_interval == 0:
-                self.log_video(it)
+                # self.log_video(it)
+                self.log_video_wandb(it, fps=30)
 
             self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
 
@@ -234,10 +236,9 @@ class Runner:
                 # Save checkpoints
                 ac_weights_checkpoint_path = f"checkpoints/ac_weights_{it:06d}.pt"
                 ac_weights_path = f"checkpoints/ac_weights_last.pt"
-                if os.path.exists(ac_weights_path):
+                if os.path.exists("checkpoints/"):
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
-                    wandb
                 else:
                     os.makedirs("checkpoints/")
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
@@ -245,7 +246,7 @@ class Runner:
                     
 
                 # Save other modules as needed
-                path = './tmp/legged_data'
+                path = 'checkpoints/'
                 os.makedirs(path, exist_ok=True)
 
                 adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
@@ -308,6 +309,27 @@ class Runner:
                 eval_video_path = f"videos/{it:05d}_eval.mp4"
                 wandb.log({"eval_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
 
+    def log_video_wandb(self, it, fps=30):
+        # self.alg.actor_critic.adaptation_module
+        # self.alg.actor_critic.actor_body
+        print("---------------------LOGGING VIDEO-----------------------")
+        policy = get_inference_policy(device=self.device)
+        video_env = copy.deepcopy(self.env)
+
+        obs = video_env.reset()
+        frames = []
+
+        for i in range(inference_steps):
+            print(f"STEP {i}")
+            with torch.no_grad():
+                actions = policy(obs)
+
+            obs, rew, done, info = video_env.step(actions)
+            img = video_env.render(mode="rgb_array")
+            frames.append(np.array(img))  # Store the frame
+
+        wandb.log({f"train_step={it:05d}_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)    
+        print("--------------------- DONE LOGGING VIDEO-----------------------")
 
     def get_inference_policy(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
