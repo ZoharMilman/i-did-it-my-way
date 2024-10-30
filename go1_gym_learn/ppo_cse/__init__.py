@@ -13,6 +13,10 @@ from .rollout_storage import RolloutStorage
 import wandb
 import numpy as np
 
+import imageio
+
+from scripts import play
+
 def class_to_dict(obj) -> dict:
     if not hasattr(obj, "__dict__"):
         return obj
@@ -50,8 +54,9 @@ class RunnerArgs(PrefixProto, cli=False):
 
     # logging
     save_interval = 400  # check for potential saves every this many iterations
-    save_video_interval = 1
+    save_video_interval = 500
     log_freq = 10
+    # inference_steps = 900 # save half minute video
 
     # load and resume
     resume = False
@@ -69,7 +74,6 @@ class Runner:
         print("ppo_cse: Rennner.init start")
         self.device = device
         self.env = env
-
         actor_critic = ActorCritic(self.env.num_obs,
                                       self.env.num_privileged_obs,
                                       self.env.num_obs_history,
@@ -221,8 +225,10 @@ class Runner:
                 "mean_adaptation_module_test_loss": mean_adaptation_module_test_loss
             }, step=it)
 
-            if it % RunnerArgs.save_video_interval == 0:
-                self.log_video(it)
+            if it + 1 % RunnerArgs.save_video_interval == 0:
+                print("should save eval vid here")
+                # self.log_video(it)
+                self.log_video_wandb(it, fps=30)
 
             self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
 
@@ -234,10 +240,9 @@ class Runner:
                 # Save checkpoints
                 ac_weights_checkpoint_path = f"checkpoints/ac_weights_{it:06d}.pt"
                 ac_weights_path = f"checkpoints/ac_weights_last.pt"
-                if os.path.exists(ac_weights_path):
+                if os.path.exists("checkpoints/"):
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
-                    wandb
                 else:
                     os.makedirs("checkpoints/")
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
@@ -245,7 +250,7 @@ class Runner:
                     
 
                 # Save other modules as needed
-                path = './tmp/legged_data'
+                path = 'checkpoints/'
                 os.makedirs(path, exist_ok=True)
 
                 adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
@@ -287,6 +292,7 @@ class Runner:
 
         # Get frames for the training environment
         frames = self.env.get_complete_frames()
+        # frames = self.env.get_video_frames()
         print("FRAMES LENGTH: ", len(frames))
         if len(frames) > 0:
             self.env.pause_recording()
@@ -295,7 +301,14 @@ class Runner:
             # Convert the frames to a video format wandb can handle
             video_path = f"videos/{it:05d}.mp4"
             fps = 1 / self.env.dt
-            wandb.log({"train_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
+
+            output_filename = f"train_step={it:05d}_video.mp4"
+            imageio.mimsave(output_filename, frames, fps=fps)
+            wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
+            # Delete the local video file after logging
+            if os.path.exists(output_filename):
+                os.remove(output_filename)  # Remove the file    
+            # wandb.log({"train_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
 
         # Get frames for the evaluation environment if it exists
         if self.env.num_eval_envs > 0:
@@ -308,12 +321,58 @@ class Runner:
                 eval_video_path = f"videos/{it:05d}_eval.mp4"
                 wandb.log({"eval_video": wandb.Video(np.array(frames), fps=fps, format="mp4")}, step=it)
 
-
+    
     def get_inference_policy(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
         if device is not None:
             self.alg.actor_critic.to(device)
         return self.alg.actor_critic.act_inference
+
+
+    def log_video_wandb(self, it, fps=30, video_len=30):
+        
+        # frames = play.play_go1_from_files(logdir="../../wandb/run-20240922_171018-08ubif8s/files", malfunctions=False)
+        # output_filename = f"train_step={it:05d}_video.mp4"
+        # imageio.mimsave(output_filename, frames, fps=30)
+        # wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
+        # # Delete the local video file after logging
+        # if os.path.exists(output_filename):
+        #     os.remove(output_filename)  # Remove the file    
+
+        # self.alg.actor_critic.adaptation_module
+        # self.alg.actor_critic.actor_body
+        with torch.inference_mode():
+            print("---------------------LOGGING VIDEO-----------------------")
+            policy = self.get_inference_policy(device=self.device)
+            print(policy)
+            # video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=True, cfg=self.env.cfg)
+            # video_env = copy.deepcopy(self.env)
+            # import pickle
+            # video_env = pickle.loads(pickle.dumps(self.env))
+
+            video_env = self.env
+            obs = video_env.reset()
+            # obs = video_env.get_observations()
+                
+            frames = []
+            for i in range(fps * video_len):
+                print(f"STEP {i}")
+                with torch.no_grad():
+                    actions = policy(obs)
+
+                obs, rew, done, info = video_env.step(actions)
+                img = video_env.render(mode="rgb_array")
+                frames.append(np.array(img))  # Store the frame
+
+            output_filename = f"train_step={it:05d}_video.mp4"
+            imageio.mimsave(output_filename, frames, fps=30)
+            wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
+            # Delete the local video file after logging
+            if os.path.exists(output_filename):
+                os.remove(output_filename)  # Remove the file
+
+            print("--------------------- DONE LOGGING VIDEO-----------------------")
+
 
     def get_expert_policy(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)

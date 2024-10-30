@@ -6,6 +6,9 @@ from typing import Dict
 from isaacgym import gymtorch, gymapi, gymutil
 from isaacgym.torch_utils import *
 
+import matplotlib.pyplot as plt
+import imageio
+
 assert gymtorch
 import torch
 
@@ -31,7 +34,35 @@ class LeggedRobot(BaseTask):
             device_id (int): 0, 1, ...
             headless (bool): Run without rendering if True
         """
-        print("init robot")
+        print("initiating robot in LeggedRobot")
+        eval_cfg = cfg
+            # turn off DR for evaluation script
+        eval_cfg.domain_rand.push_robots = False
+        eval_cfg.domain_rand.randomize_friction = False
+        eval_cfg.domain_rand.randomize_gravity = False
+        eval_cfg.domain_rand.randomize_restitution = False
+        eval_cfg.domain_rand.randomize_motor_offset = False
+        eval_cfg.domain_rand.randomize_motor_strength = False
+        eval_cfg.domain_rand.randomize_friction_indep = False
+        eval_cfg.domain_rand.randomize_ground_friction = False
+        eval_cfg.domain_rand.randomize_base_mass = False
+        eval_cfg.domain_rand.randomize_Kd_factor = False
+        eval_cfg.domain_rand.randomize_Kp_factor = False
+        eval_cfg.domain_rand.randomize_joint_friction = False
+        eval_cfg.domain_rand.randomize_com_displacement = False
+
+        eval_cfg.env.num_recording_envs = 1
+        eval_cfg.env.num_envs = 1
+        eval_cfg.terrain.num_rows = 5
+        eval_cfg.terrain.num_cols = 5
+        eval_cfg.terrain.border_size = 0
+        eval_cfg.terrain.center_robots = True
+        eval_cfg.terrain.center_span = 1
+        eval_cfg.terrain.teleport_robots = True
+
+        eval_cfg.domain_rand.lag_timesteps = 6
+        eval_cfg.domain_rand.randomize_lag_timesteps = True
+        eval_cfg.control.control_type = "actuator_net"
         self.cfg = cfg
         self.eval_cfg = eval_cfg
         self.sim_params = sim_params
@@ -42,7 +73,8 @@ class LeggedRobot(BaseTask):
         if eval_cfg is not None: self._parse_cfg(eval_cfg)
         self._parse_cfg(self.cfg)
 
-        print("call super")
+        print("calling base task constructor from LeggedRobot")
+        print("sim device is: " + str(sim_device))
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless, self.eval_cfg)
         print("robot init next")
 
@@ -988,6 +1020,7 @@ class LeggedRobot(BaseTask):
             env_ids (List[int]): Environemnt ids
         """
         # base position
+        # print("entered reset root states!!!!!!")
         if self.custom_origins:
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
@@ -1017,18 +1050,27 @@ class LeggedRobot(BaseTask):
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self.root_states),
                                                      gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
-
+        # print("condition is: " + str(cfg.env.record_video and 0 in env_ids) + " other cond is: " + str(0 in env_ids))
+        # print(env_ids)
         if cfg.env.record_video and 0 in env_ids:
+            # print("trying to update frames?")
             if self.complete_video_frames is None:
                 self.complete_video_frames = []
             else:
                 self.complete_video_frames = self.video_frames[:]
+                # print("updating frames!!!!!!")
+                # self.complete_video_frames.extend(self.video_frames)
             self.video_frames = []
-
+        # print(self.eval_cfg )
+        print("updating frames maybe")
         if cfg.env.record_video and self.eval_cfg is not None and self.num_train_envs in env_ids:
+            print("success")
+        # if cfg.env.record_video and self.eval_cfg is not None:
+            # print(" entered condition ")
             if self.complete_video_frames_eval is None:
                 self.complete_video_frames_eval = []
             else:
+                # print("updating frames eval!!!!!!")
                 self.complete_video_frames_eval = self.video_frames_eval[:]
             self.video_frames_eval = []
 
@@ -1656,9 +1698,16 @@ class LeggedRobot(BaseTask):
             
             if self.video_frame is None or len(self.video_frame) == 0:
                 print('ERROR: VIDEO FRAME EMPTY')
+            
                  
             self.video_frame = self.video_frame.reshape((self.camera_props.height, self.camera_props.width, 4))
             self.video_frames.append(self.video_frame)
+            print("VIDEO FRAMES LEN: ", len(self.video_frames))
+            # checking if the video exists
+            # plt.imsave('test_frame.png', self.video_frame)
+            # output_filename = f'{len(self.video_frames)}_test_video.mp4'
+            # output_filename = 'test_video.mp4'
+            # imageio.mimsave(output_filename, self.video_frames, fps=30)
 
         if self.record_eval_now and self.complete_video_frames_eval is not None and len(
                 self.complete_video_frames_eval) == 0:
@@ -1703,6 +1752,11 @@ class LeggedRobot(BaseTask):
             return []
         return self.complete_video_frames_eval
 
+    def get_video_frames(self):
+        if self.video_frames is None:
+            return []
+        return self.video_frames
+    
     def _get_env_origins(self, env_ids, cfg):
         """ Sets environment origins. On rough terrain the origins are defined by the terrain platforms.
             Otherwise create a grid.

@@ -21,6 +21,8 @@ from scripts.config_env import config_env
 
 import yaml
 
+print("Lets play!")
+
 def get_logdir(pretrain=False):
     label = "gait-conditioned-agility/%s/train" % ( "pretrain-v0" if pretrain else "2*")
 
@@ -34,9 +36,11 @@ def get_logdir(pretrain=False):
 
 
 def load_policy(logdir):
+    print("LOADING POLICY FROM " + logdir)
     body = torch.jit.load(logdir + '/checkpoints/body_latest.jit')
-    import os
+    # body = torch.jit.load(logdir + '/checkpoints/body_000800.jit')
     adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_latest.jit')
+    # adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_000800.jit')
 
     def policy(obs, info={}):
         i = 0
@@ -94,7 +98,7 @@ def load_env(logdir, headless=False):
 
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg) 
     env = HistoryWrapper(env)
 
     # load policy
@@ -158,7 +162,15 @@ def load_env_from_yaml(logdir, headless=False):
     from ml_logger import logger
     from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
 
-    policy = load_policy(logdir)
+    actor_critic = ActorCritic(env.num_obs,
+                               env.num_privileged_obs,
+                               env.num_obs_history,
+                               env.num_actions).to('cuda:0')
+    
+    actor_critic.load_state_dict(torch.load(logdir + '/checkpoints/ac_weights_last.pt'))
+
+    # policy = load_policy(logdir)
+    policy = actor_critic.act_inference
 
     return env, policy
 
@@ -170,11 +182,11 @@ def play_go1(headless=True):
     import glob
     import os
 
-    logdir = "../wandb/latest-run/files"
+    logdir = "wandb/run-20241026_164547-kz7g9ho5/files"
     # logdir = "../runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
     env, policy = load_env_from_yaml(logdir, headless=headless)
 
-    num_eval_steps = 250
+    num_eval_steps = 900
     gaits = {"pronking": [0, 0, 0],
              "trotting": [0.5, 0, 0],
              "bounding": [0, 0.5, 0],
@@ -220,7 +232,7 @@ def play_go1(headless=True):
         img = env.render(mode="rgb_array")
         frames.append(np.array(img))  # Store the frame
     
-    output_filename = logdir + '/environment_video.mp4'
+    output_filename = logdir + '/play_video.mp4'
     imageio.mimsave(output_filename, frames, fps=30)
 
     # # plot target and measured forward velocity

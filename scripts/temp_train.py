@@ -193,11 +193,14 @@ def initialize_env_config(Cfg, headless=True):
     Cfg.commands.binary_phases = True
     Cfg.commands.gaitwise_curricula = True
 
-    config_env(Cfg)
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
+    # THIS IS WHERE MALFUNCTIONS ARE ADDED
+    # config_env(Cfg)
+
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
     env = HistoryWrapper(env)
     print("Initialized Enviorment")
     return env
+
 
 def train_go1(headless=True):
     import isaacgym
