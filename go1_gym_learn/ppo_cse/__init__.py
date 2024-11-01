@@ -17,6 +17,8 @@ import imageio
 
 from scripts import play
 
+from datetime import datetime
+
 def class_to_dict(obj) -> dict:
     if not hasattr(obj, "__dict__"):
         return obj
@@ -53,8 +55,8 @@ class RunnerArgs(PrefixProto, cli=False):
     max_iterations = 1500  # number of policy updates
 
     # logging
-    save_interval = 400  # check for potential saves every this many iterations
-    save_video_interval = 500
+    save_interval = 500  # check for potential saves every this many iterations
+    save_video_interval = 200
     log_freq = 10
     # inference_steps = 900 # save half minute video
 
@@ -64,6 +66,8 @@ class RunnerArgs(PrefixProto, cli=False):
     checkpoint = -1  # -1 = last saved model
     resume_path = None  # updated from load_run and chkpt
     resume_curriculum = True
+    run_id = None # For wandb style logging 
+    api_run_path = None # Also for wandb
 
 
 class Runner:
@@ -80,23 +84,52 @@ class Runner:
                                       self.env.num_actions,
                                       ).to(self.device)
 
+        
+        
+        self.tot_time = 0
+        self.current_learning_iteration = 0
+        
         if RunnerArgs.resume:
             # load pretrained weights from resume_path
-            from ml_logger import ML_Logger
-            loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
-                               prefix=RunnerArgs.resume_path)
-            weights = loader.load_torch("checkpoints/ac_weights_last.pt")
-            actor_critic.load_state_dict(state_dict=weights)
+            # from ml_logger import ML_Logger
+            # loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
+            #                    prefix=RunnerArgs.resume_path)
+            # weights = loader.load_torch("checkpoints/ac_weights_last.pt")
+            # actor_critic.load_state_dict(state_dict=weights)
 
-            if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
-                # load curriculum state
-                distributions = loader.load_pkl("curriculum/distribution.pkl")
-                distribution_last = distributions[-1]["distribution"]
-                gait_names = [key[8:] if key.startswith("weights_") else None for key in distribution_last.keys()]
-                for gait_id, gait_name in enumerate(self.env.category_names):
-                    self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
-                    print(gait_name)
+            print(f'--------------------RESUMING RUN: {RunnerArgs.run_id}--------------------------------')
+            actor_critic.load_state_dict(torch.load(RunnerArgs.resume_path + f'/checkpoints/{RunnerArgs.run_id}/ac_weights_last.pt'))
 
+            if 'pretrain' not in RunnerArgs.resume_path:
+                api = wandb.Api()
+                run = api.run(RunnerArgs.api_run_path)
+                history = run.history()
+                # Check the last entry in the history to find the last logged iteration
+                if not history.empty:
+                    self.current_learning_iteration = int(history['iteration'].iloc[-1])  
+                    print(f'Last logged iteration: {self.current_learning_iteration}')
+                else:
+                    print("No history found for this run.")
+            
+
+            # if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
+            #     distribution_last = history["distribution"].iloc[-1] 
+            #     gait_names = [key[8:] if key.startswith("weights_") else None for key in distribution_last.keys()]
+            #     for gait_id, gait_name in enumerate(self.env.category_names):
+            #         self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
+            #         print(gait_name)
+
+            # if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
+            #     # load curriculum state
+            #     distributions = loader.load_pkl("curriculum/distribution.pkl")
+            #     distribution_last = distributions[-1]["distribution"]
+            #     gait_names = [key[8:] if key.startswith("weights_") else None for key in distribution_last.keys()]
+            #     for gait_id, gait_name in enumerate(self.env.category_names):
+            #         self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
+            #         print(gait_name)
+
+
+        self.tot_timesteps = 0
         self.alg = PPO(actor_critic, device=self.device)
         self.num_steps_per_env = RunnerArgs.num_steps_per_env
 
@@ -104,10 +137,10 @@ class Runner:
         self.alg.init_storage(self.env.num_train_envs, self.num_steps_per_env, [self.env.num_obs],
                               [self.env.num_privileged_obs], [self.env.num_obs_history], [self.env.num_actions])
 
-        self.tot_timesteps = 0
-        self.tot_time = 0
-        self.current_learning_iteration = 0
-        self.last_recording_it = 0
+        # self.tot_timesteps = 0
+        # self.tot_time = 0
+        # self.current_learning_iteration = 0
+        # self.last_recording_it = 0
 
         self.env.reset()
 
@@ -213,6 +246,7 @@ class Runner:
             learn_time = stop - start
 
             wandb.log({
+                "iteration": it, 
                 "time_elapsed": time.time() - wandb.run.start_time,
                 "time_iter": learn_time,
                 "adaptation_loss": mean_adaptation_module_loss,
@@ -225,10 +259,10 @@ class Runner:
                 "mean_adaptation_module_test_loss": mean_adaptation_module_test_loss
             }, step=it)
 
-            if it + 1 % RunnerArgs.save_video_interval == 0:
+            if it % RunnerArgs.save_video_interval == 0:
                 print("should save eval vid here")
                 # self.log_video(it)
-                self.log_video_wandb(it, fps=30)
+                # self.log_video_wandb(it, fps=30)
 
             self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
 
@@ -236,21 +270,24 @@ class Runner:
             if it % RunnerArgs.log_freq == 0:
                 wandb.log({"timesteps": self.tot_timesteps, "iterations": it}, step=it)
 
-            if it % RunnerArgs.save_interval == 0:
+            if (it + 1) % RunnerArgs.save_interval == 0:
                 # Save checkpoints
-                ac_weights_checkpoint_path = f"checkpoints/ac_weights_{it:06d}.pt"
-                ac_weights_path = f"checkpoints/ac_weights_last.pt"
-                if os.path.exists("checkpoints/"):
+                now = datetime.now()
+                current_time = now.strftime("%d_%m_%Y__%H_%M_%S")
+                path = 'checkpoints/' + wandb.run.id + '/'
+                ac_weights_checkpoint_path = f"{path}/ac_weights_{it:06d}.pt"
+                ac_weights_path = f"{path}/ac_weights_last.pt"
+                if os.path.exists(f"{path}"):
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
                 else:
-                    os.makedirs("checkpoints/")
+                    os.makedirs(f"{path}")
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
                     torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
                     
 
                 # Save other modules as needed
-                path = 'checkpoints/'
+                
                 os.makedirs(path, exist_ok=True)
 
                 adaptation_module_checkpoint_path = f'{path}/adaptation_module_{it:06d}.jit'
@@ -274,6 +311,9 @@ class Runner:
                 wandb.save(adaptation_module_checkpoint_path)
                 wandb.save(body_path)
                 wandb.save(body_checkpoint_path)
+
+                # # Delete local shenanigans 
+                # os.rmdir(f'{path}')
 
         self.current_learning_iteration += num_learning_iterations
         print("Learning complete")
@@ -345,12 +385,13 @@ class Runner:
             print("---------------------LOGGING VIDEO-----------------------")
             policy = self.get_inference_policy(device=self.device)
             print(policy)
+
             # video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=True, cfg=self.env.cfg)
             # video_env = copy.deepcopy(self.env)
             # import pickle
             # video_env = pickle.loads(pickle.dumps(self.env))
-
             video_env = self.env
+
             obs = video_env.reset()
             # obs = video_env.get_observations()
                 

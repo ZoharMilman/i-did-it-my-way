@@ -207,6 +207,7 @@ def train_go1(headless=True):
     assert isaacgym
     import torch
     import wandb
+    import os
 
     from go1_gym.envs.base.legged_robot_config import Cfg
     from go1_gym.envs.go1.go1_config import config_go1
@@ -219,16 +220,47 @@ def train_go1(headless=True):
     config_go1(Cfg)
     env = initialize_env_config(Cfg, headless=headless)
 
+    # Runner Arguments
+    num_of_iterations = 100 # Adjust as needed
+    RunnerArgs.resume = False
+    RunnerArgs.resume_path = 'wandb/run-20241101_182217-y0dwupdg/files'
+    RunnerArgs.save_interval = 10
+
+    if RunnerArgs.resume and RunnerArgs.resume_path is not None:
+        RunnerArgs.run_id = os.listdir(RunnerArgs.resume_path + '/checkpoints')[0]
+        RunnerArgs.api_run_path = f'zoharmilman/robot-training/{RunnerArgs.run_id}'
+
     # Initialize wandb
     now = datetime.now()
     
-    wandb.init(project="robot-training", config={
-        "AC_Args": vars(AC_Args),
-        "PPO_Args": vars(PPO_Args),
-        "RunnerArgs": vars(RunnerArgs),
-        "Cfg": vars(Cfg),
-    },
-    name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    if RunnerArgs.resume: 
+        if 'pretrain' in RunnerArgs.resume_path:
+            wandb.init(project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+        else:
+            wandb.init(id=RunnerArgs.run_id, resume='must', project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    else:
+        wandb.init(project="robot-training", config={
+            "AC_Args": vars(AC_Args),
+            "PPO_Args": vars(PPO_Args),
+            "RunnerArgs": vars(RunnerArgs),
+            "Cfg": vars(Cfg),
+        },
+        name=now.strftime("%d_%m_%Y__%H_%M_%S"))
 
     # Log experiment parameters
     wandb.config.update({
@@ -241,7 +273,7 @@ def train_go1(headless=True):
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")
 
-    num_of_iterations = 5  # Adjust as needed
+ 
     print(f"Running for {num_of_iterations} iterations")
 
     # Start learning process

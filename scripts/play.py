@@ -37,9 +37,10 @@ def get_logdir(pretrain=False):
 
 def load_policy(logdir):
     print("LOADING POLICY FROM " + logdir)
-    body = torch.jit.load(logdir + '/checkpoints/body_latest.jit')
+    run_id = os.listdir(logdir + '/checkpoints')[0]
+    body = torch.jit.load(logdir + f'/checkpoints/{run_id}/body_latest.jit')
     # body = torch.jit.load(logdir + '/checkpoints/body_000800.jit')
-    adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_latest.jit')
+    adaptation_module = torch.jit.load(logdir + f'/checkpoints/{run_id}/adaptation_module_latest.jit')
     # adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_000800.jit')
 
     def policy(obs, info={}):
@@ -54,6 +55,7 @@ def load_policy(logdir):
 
 def load_env(logdir, headless=False):
     # logdir = get_logdir()
+    print("----------------LOADING ENV FROM parameters.pkl---------------------")
     with open(logdir + "/parameters.pkl", 'rb') as file:
         pkl_cfg = pkl.load(file)
         print(pkl_cfg.keys())
@@ -162,15 +164,15 @@ def load_env_from_yaml(logdir, headless=False):
     from ml_logger import logger
     from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
 
-    actor_critic = ActorCritic(env.num_obs,
-                               env.num_privileged_obs,
-                               env.num_obs_history,
-                               env.num_actions).to('cuda:0')
+    # actor_critic = ActorCritic(env.num_obs,
+    #                            env.num_privileged_obs,
+    #                            env.num_obs_history,
+    #                            env.num_actions).to('cuda:0')
     
-    actor_critic.load_state_dict(torch.load(logdir + '/checkpoints/ac_weights_last.pt'))
+    # actor_critic.load_state_dict(torch.load(logdir + '/checkpoints/ac_weights_last.pt'))
 
-    # policy = load_policy(logdir)
-    policy = actor_critic.act_inference
+    policy = load_policy(logdir)
+    # policy = actor_critic.act_inference
 
     return env, policy
 
@@ -182,9 +184,13 @@ def play_go1(headless=True):
     import glob
     import os
 
-    logdir = "wandb/run-20241026_164547-kz7g9ho5/files"
-    # logdir = "../runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
+    # logdir = "wandb/run-20241030_161551-9rrtez7u/files"
+    
+    # logdir = "runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
+    logdir = "wandb/latest-run/files"
     env, policy = load_env_from_yaml(logdir, headless=headless)
+    # env, policy = load_env(logdir, headless=headless)
+    
 
     num_eval_steps = 900
     gaits = {"pronking": [0, 0, 0],
@@ -231,9 +237,13 @@ def play_go1(headless=True):
 
         img = env.render(mode="rgb_array")
         frames.append(np.array(img))  # Store the frame
+        # if i % 300 == 0:
+        #     env.reset()
+    
     
     output_filename = logdir + '/play_video.mp4'
     imageio.mimsave(output_filename, frames, fps=30)
+    print("Saved video to: " + output_filename)
 
     # # plot target and measured forward velocity
     # from matplotlib import pyplot as plt
