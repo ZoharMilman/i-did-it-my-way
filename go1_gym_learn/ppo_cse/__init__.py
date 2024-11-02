@@ -4,7 +4,7 @@ import copy
 import os
 
 import torch
-from ml_logger import logger
+# from ml_logger import logger
 from params_proto import PrefixProto
 
 from .actor_critic import ActorCritic
@@ -18,6 +18,8 @@ import imageio
 from scripts import play
 
 from datetime import datetime
+
+import multiprocessing
 
 def class_to_dict(obj) -> dict:
     if not hasattr(obj, "__dict__"):
@@ -88,7 +90,7 @@ class Runner:
         
         self.tot_time = 0
         self.current_learning_iteration = 0
-        
+
         if RunnerArgs.resume:
             # load pretrained weights from resume_path
             # from ml_logger import ML_Logger
@@ -263,6 +265,8 @@ class Runner:
                 print("should save eval vid here")
                 # self.log_video(it)
                 # self.log_video_wandb(it, fps=30)
+                # video_process = multiprocessing.Process(target=self.save_video_process, args=(it, ))
+                # video_process.start()
 
             self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
 
@@ -369,51 +373,53 @@ class Runner:
         return self.alg.actor_critic.act_inference
 
 
-    def log_video_wandb(self, it, fps=30, video_len=30):
-        
-        # frames = play.play_go1_from_files(logdir="../../wandb/run-20240922_171018-08ubif8s/files", malfunctions=False)
-        # output_filename = f"train_step={it:05d}_video.mp4"
-        # imageio.mimsave(output_filename, frames, fps=30)
-        # wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
-        # # Delete the local video file after logging
-        # if os.path.exists(output_filename):
-        #     os.remove(output_filename)  # Remove the file    
+    def log_video_wandb(self, it, fps=30):
+        from scripts import play
 
-        # self.alg.actor_critic.adaptation_module
-        # self.alg.actor_critic.actor_body
         with torch.inference_mode():
             print("---------------------LOGGING VIDEO-----------------------")
             policy = self.get_inference_policy(device=self.device)
-            print(policy)
-
-            # video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=True, cfg=self.env.cfg)
-            # video_env = copy.deepcopy(self.env)
-            # import pickle
-            # video_env = pickle.loads(pickle.dumps(self.env))
-            video_env = self.env
-
-            obs = video_env.reset()
-            # obs = video_env.get_observations()
-                
-            frames = []
-            for i in range(fps * video_len):
-                print(f"STEP {i}")
-                with torch.no_grad():
-                    actions = policy(obs)
-
-                obs, rew, done, info = video_env.step(actions)
-                img = video_env.render(mode="rgb_array")
-                frames.append(np.array(img))  # Store the frame
+            frames = play.play_go1(self.env, policy)
 
             output_filename = f"train_step={it:05d}_video.mp4"
-            imageio.mimsave(output_filename, frames, fps=30)
+            imageio.mimsave(output_filename, frames, fps=fps)
             wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
-            # Delete the local video file after logging
-            if os.path.exists(output_filename):
-                os.remove(output_filename)  # Remove the file
 
-            print("--------------------- DONE LOGGING VIDEO-----------------------")
+        # with torch.inference_mode():
+        #     print("---------------------LOGGING VIDEO-----------------------")
+        #     policy = self.get_inference_policy(device=self.device)
+        #     print(policy)
 
+        #     # video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=True, cfg=self.env.cfg)
+        #     # video_env = copy.deepcopy(self.env)
+        #     # import pickle
+        #     # video_env = pickle.loads(pickle.dumps(self.env))
+        #     # video_env = self.env
+
+        #     obs = video_env.reset()
+        #     # obs = video_env.get_observations()
+                
+        #     frames = []
+        #     for i in range(fps * video_len):
+        #         print(f"STEP {i}")
+        #         with torch.no_grad():
+        #             actions = policy(obs)
+
+        #         obs, rew, done, info = video_env.step(actions)
+        #         img = video_env.render(mode="rgb_array")
+        #         frames.append(np.array(img))  # Store the frame
+
+        #     output_filename = f"train_step={it:05d}_video.mp4"
+        #     imageio.mimsave(output_filename, frames, fps=30)
+        #     wandb.log({f"train_step={it:05d}_video": wandb.Video(output_filename, fps=fps, format="mp4")}, step=it)
+        #     # Delete the local video file after logging
+        #     if os.path.exists(output_filename):
+        #         os.remove(output_filename)  # Remove the file
+
+        #     print("--------------------- DONE LOGGING VIDEO-----------------------")
+
+    def save_video_process(self, it):
+        self.log_video_wandb(it, fps=30)
 
     def get_expert_policy(self, device=None):
         self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)

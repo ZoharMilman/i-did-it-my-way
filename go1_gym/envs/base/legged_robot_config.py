@@ -207,6 +207,8 @@ class Cfg(PrefixProto, cli=False):
         default_joint_angles = {"joint_a": 0., "joint_b": 0.}
 
     class control(PrefixProto, cli=False):
+    
+        
         # Solution 2 - override the actions\torques:
         override_joint_action = False # NOTE yoav: set the relevant joint action as zero
         override_action_index = 0 # TODO insert

@@ -14,6 +14,7 @@ from go1_gym.envs import *
 from go1_gym.envs.base.legged_robot_config import Cfg
 from go1_gym.envs.go1.go1_config import config_go1
 from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
+from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
 from tqdm import tqdm
 
@@ -53,63 +54,100 @@ def load_policy(logdir):
     return policy
 
 
-def load_env(logdir, headless=False):
-    # logdir = get_logdir()
-    print("----------------LOADING ENV FROM parameters.pkl---------------------")
-    with open(logdir + "/parameters.pkl", 'rb') as file:
-        pkl_cfg = pkl.load(file)
-        print(pkl_cfg.keys())
-        cfg = pkl_cfg["Cfg"]
-        print(cfg.keys())
+# def load_env(logdir, headless=False):
+#     # logdir = get_logdir()
+#     print("----------------LOADING ENV FROM parameters.pkl---------------------")
+#     with open(logdir + "/parameters.pkl", 'rb') as file:
+#         pkl_cfg = pkl.load(file)
+#         print(pkl_cfg.keys())
+#         cfg = pkl_cfg["Cfg"]
+#         print(cfg.keys())
 
-        for key, value in cfg.items():
-            if hasattr(Cfg, key):
-                for key2, value2 in cfg[key].items():
-                    setattr(getattr(Cfg, key), key2, value2)
+#         for key, value in cfg.items():
+#             if hasattr(Cfg, key):
+#                 for key2, value2 in cfg[key].items():
+#                     setattr(getattr(Cfg, key), key2, value2)
 
+#     # turn off DR for evaluation script
+#     Cfg.domain_rand.push_robots = False
+#     Cfg.domain_rand.randomize_friction = False
+#     Cfg.domain_rand.randomize_gravity = False
+#     Cfg.domain_rand.randomize_restitution = False
+#     Cfg.domain_rand.randomize_motor_offset = False
+#     Cfg.domain_rand.randomize_motor_strength = False
+#     Cfg.domain_rand.randomize_friction_indep = False
+#     Cfg.domain_rand.randomize_ground_friction = False
+#     Cfg.domain_rand.randomize_base_mass = False
+#     Cfg.domain_rand.randomize_Kd_factor = False
+#     Cfg.domain_rand.randomize_Kp_factor = False
+#     Cfg.domain_rand.randomize_joint_friction = False
+#     Cfg.domain_rand.randomize_com_displacement = False
+
+#     Cfg.env.num_recording_envs = 1
+#     Cfg.env.num_envs = 1
+#     Cfg.terrain.num_rows = 5
+#     Cfg.terrain.num_cols = 5
+#     Cfg.terrain.border_size = 0
+#     Cfg.terrain.center_robots = True
+#     Cfg.terrain.center_span = 1
+#     Cfg.terrain.teleport_robots = True
+
+#     Cfg.domain_rand.lag_timesteps = 6
+#     Cfg.domain_rand.randomize_lag_timesteps = True
+#     Cfg.control.control_type = "actuator_net"
+
+#     # our part
+#     # config_env(Cfg) # THIS IS WHERE YOU NEED TO ADD MALFUNCTIONS
+
+#     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
+
+#     env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg) 
+#     env = HistoryWrapper(env)
+
+#     # load policy
+#     # from ml_logger import logger
+#     # from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
+
+#     policy = load_policy(logdir)
+
+#     return env, policy
+
+def get_video_env(env):
+    import copy
+    video_cfg = copy.deepcopy(env.cfg)
+    
     # turn off DR for evaluation script
-    Cfg.domain_rand.push_robots = False
-    Cfg.domain_rand.randomize_friction = False
-    Cfg.domain_rand.randomize_gravity = False
-    Cfg.domain_rand.randomize_restitution = False
-    Cfg.domain_rand.randomize_motor_offset = False
-    Cfg.domain_rand.randomize_motor_strength = False
-    Cfg.domain_rand.randomize_friction_indep = False
-    Cfg.domain_rand.randomize_ground_friction = False
-    Cfg.domain_rand.randomize_base_mass = False
-    Cfg.domain_rand.randomize_Kd_factor = False
-    Cfg.domain_rand.randomize_Kp_factor = False
-    Cfg.domain_rand.randomize_joint_friction = False
-    Cfg.domain_rand.randomize_com_displacement = False
+    video_cfg.domain_rand.push_robots = False
+    video_cfg.domain_rand.randomize_friction = False
+    video_cfg.domain_rand.randomize_gravity = False
+    video_cfg.domain_rand.randomize_restitution = False
+    video_cfg.domain_rand.randomize_motor_offset = False
+    video_cfg.domain_rand.randomize_motor_strength = False
+    video_cfg.domain_rand.randomize_friction_indep = False
+    video_cfg.domain_rand.randomize_ground_friction = False
+    video_cfg.domain_rand.randomize_base_mass = False
+    video_cfg.domain_rand.randomize_Kd_factor = False
+    video_cfg.domain_rand.randomize_Kp_factor = False
+    video_cfg.domain_rand.randomize_joint_friction = False
+    video_cfg.domain_rand.randomize_com_displacement = False
 
-    Cfg.env.num_recording_envs = 1
-    Cfg.env.num_envs = 1
-    Cfg.terrain.num_rows = 5
-    Cfg.terrain.num_cols = 5
-    Cfg.terrain.border_size = 0
-    Cfg.terrain.center_robots = True
-    Cfg.terrain.center_span = 1
-    Cfg.terrain.teleport_robots = True
+    video_cfg.env.num_recording_envs = 1
+    video_cfg.env.num_envs = 1
+    video_cfg.terrain.num_rows = 5
+    video_cfg.terrain.num_cols = 5
+    video_cfg.terrain.border_size = 0
+    video_cfg.terrain.center_robots = True
+    video_cfg.terrain.center_span = 1
+    video_cfg.terrain.teleport_robots = True
 
-    Cfg.domain_rand.lag_timesteps = 6
-    Cfg.domain_rand.randomize_lag_timesteps = True
-    Cfg.control.control_type = "actuator_net"
+    video_cfg.domain_rand.lag_timesteps = 6
+    video_cfg.domain_rand.randomize_lag_timesteps = True
+    video_cfg.control.control_type = "actuator_net"
 
-    # our part
-    # config_env(Cfg) # THIS IS WHERE YOU NEED TO ADD MALFUNCTIONS
+    video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=video_cfg)
+    video_env = HistoryWrapper(video_env)
 
-    from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
-
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg) 
-    env = HistoryWrapper(env)
-
-    # load policy
-    from ml_logger import logger
-    from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
-
-    policy = load_policy(logdir)
-
-    return env, policy
+    return video_env
 
 def load_env_from_yaml(logdir, headless=False):
     print("----------------LOADING ENV FROM YAML---------------------")
@@ -155,14 +193,14 @@ def load_env_from_yaml(logdir, headless=False):
     # our part
     # config_env(Cfg) # THIS IS WHERE YOU NEED TO ADD MALFUNCTIONS
 
-    from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
+    # from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
     env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
     env = HistoryWrapper(env)
 
     # load policy
-    from ml_logger import logger
-    from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
+    # from ml_logger import logger
+    # from go1_gym_learn.ppo_cse.actor_critic import ActorCritic
 
     # actor_critic = ActorCritic(env.num_obs,
     #                            env.num_privileged_obs,
@@ -176,23 +214,8 @@ def load_env_from_yaml(logdir, headless=False):
 
     return env, policy
 
-def play_go1(headless=True):
-    from ml_logger import logger
 
-    from pathlib import Path
-    from go1_gym import MINI_GYM_ROOT_DIR
-    import glob
-    import os
-
-    # logdir = "wandb/run-20241030_161551-9rrtez7u/files"
-    
-    # logdir = "runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
-    logdir = "wandb/latest-run/files"
-    env, policy = load_env_from_yaml(logdir, headless=headless)
-    # env, policy = load_env(logdir, headless=headless)
-    
-
-    num_eval_steps = 900
+def get_play_frames(env, policy, num_eval_steps=900):
     gaits = {"pronking": [0, 0, 0],
              "trotting": [0.5, 0, 0],
              "bounding": [0, 0.5, 0],
@@ -239,7 +262,27 @@ def play_go1(headless=True):
         frames.append(np.array(img))  # Store the frame
         # if i % 300 == 0:
         #     env.reset()
+
+    return frames
+
+
+
+def play_go1_from_files(logdir, headless=True):
+    # from ml_logger import logger
+
+    from pathlib import Path
+    from go1_gym import MINI_GYM_ROOT_DIR
+    import glob
+    import os
+
+    # logdir = "wandb/run-20241030_161551-9rrtez7u/files"
     
+    # logdir = "runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
+    # logdir = "wandb/latest-run/files"
+    env, policy = load_env_from_yaml(logdir, headless=headless)
+    # env, policy = load_env(logdir, headless=headless)
+    
+    frames = get_play_frames(env, policy)
     
     output_filename = logdir + '/play_video.mp4'
     imageio.mimsave(output_filename, frames, fps=30)
@@ -267,6 +310,14 @@ def play_go1(headless=True):
     # plt.show()
 
 
+
+def play_go1(env, policy, num_eval_steps=900, headless=False):
+    # Get a video enviorment with DR turned off
+    video_env = get_video_env(env)
+    frames = get_play_frames(video_env, policy, num_eval_steps=num_eval_steps)
+
+    return frames
+
 if __name__ == '__main__':
     # to see the environment rendering, set headless=False
-    play_go1(headless=False)
+    play_go1_from_files(logdir="wandb/latest-run/files", headless=False)

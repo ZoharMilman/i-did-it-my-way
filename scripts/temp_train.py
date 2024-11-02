@@ -224,6 +224,7 @@ def train_go1(headless=True):
     num_of_iterations = 100 # Adjust as needed
     RunnerArgs.resume = False
     RunnerArgs.resume_path = 'wandb/run-20241101_182217-y0dwupdg/files'
+    RunnerArgs.save_video_interval = 10
     RunnerArgs.save_interval = 10
 
     if RunnerArgs.resume and RunnerArgs.resume_path is not None:
@@ -284,7 +285,10 @@ def train_go1(headless=True):
 
 if __name__ == '__main__':
     from pathlib import Path
+    import multiprocessing
 
+    multiprocessing.set_start_method('spawn')
+    
     # Setup wandb project and logging
     wandb.login(key="70236d768d6ec323c1df61af26e16d2a71c0f83f")  
     stem = Path(__file__).stem
