@@ -958,6 +958,17 @@ class LeggedRobot(BaseTask):
         Returns:
             [torch.Tensor]: Torques sent to the simulation
         """
+        # Computing motor faults factors
+    
+        if self.cfg.control.apply_faults:
+            fault_factors = self.cfg.control.fault_distribtion_func(size=(actions.shape[1],))
+            fault_factors = torch.clip(fault_factors, self.cfg.control.fault_min, self.cfg.control.fault_max)
+            fault_factors = fault_factors.to(self.device)
+
+        else: # Faults not applied
+            fault_factors = torch.ones(actions.shape[1], device=self.device)
+            # fault_factors.to(self.device)
+        
         # pd controller
         actions_scaled = actions[:, :12] * self.cfg.control.action_scale
         actions_scaled[:, [0, 3, 6, 9]] *= self.cfg.control.hip_scale_reduction  # scale down hip flexion range
@@ -990,7 +1001,7 @@ class LeggedRobot(BaseTask):
         else:
             raise NameError(f"Unknown controller type: {control_type}")
 
-        torques = torques * self.motor_strengths
+        torques = torques * self.motor_strengths * fault_factors
         if self.cfg.control.override_torque:
             torques[:,self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
@@ -1062,9 +1073,9 @@ class LeggedRobot(BaseTask):
                 # self.complete_video_frames.extend(self.video_frames)
             self.video_frames = []
         # print(self.eval_cfg )
-        print("updating frames maybe")
+        # print("updating frames maybe")
         if cfg.env.record_video and self.eval_cfg is not None and self.num_train_envs in env_ids:
-            print("success")
+            # print("success")
         # if cfg.env.record_video and self.eval_cfg is not None:
             # print(" entered condition ")
             if self.complete_video_frames_eval is None:

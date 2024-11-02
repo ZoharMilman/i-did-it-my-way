@@ -194,7 +194,7 @@ def initialize_env_config(Cfg, headless=True):
     Cfg.commands.gaitwise_curricula = True
 
     # THIS IS WHERE MALFUNCTIONS ARE ADDED
-    # config_env(Cfg)
+    config_env(Cfg)
 
     env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
     env = HistoryWrapper(env)
@@ -221,11 +221,11 @@ def train_go1(headless=True):
     env = initialize_env_config(Cfg, headless=headless)
 
     # Runner Arguments
-    num_of_iterations = 100 # Adjust as needed
-    RunnerArgs.resume = False
-    RunnerArgs.resume_path = 'wandb/run-20241101_182217-y0dwupdg/files'
-    RunnerArgs.save_video_interval = 10
-    RunnerArgs.save_interval = 10
+    num_of_iterations = 10000 # Adjust as needed
+    RunnerArgs.resume = True
+    RunnerArgs.resume_path = 'wandb/pretrain_wtw/files'
+    RunnerArgs.save_video_interval = 1000
+    RunnerArgs.save_interval = 1000
 
     if RunnerArgs.resume and RunnerArgs.resume_path is not None:
         RunnerArgs.run_id = os.listdir(RunnerArgs.resume_path + '/checkpoints')[0]
