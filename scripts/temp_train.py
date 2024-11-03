@@ -193,17 +193,21 @@ def initialize_env_config(Cfg, headless=True):
     Cfg.commands.binary_phases = True
     Cfg.commands.gaitwise_curricula = True
 
+    # THIS IS WHERE MALFUNCTIONS ARE ADDED
     config_env(Cfg)
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
+
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
     env = HistoryWrapper(env)
     print("Initialized Enviorment")
     return env
+
 
 def train_go1(headless=True):
     import isaacgym
     assert isaacgym
     import torch
     import wandb
+    import os
 
     from go1_gym.envs.base.legged_robot_config import Cfg
     from go1_gym.envs.go1.go1_config import config_go1
@@ -216,16 +220,48 @@ def train_go1(headless=True):
     config_go1(Cfg)
     env = initialize_env_config(Cfg, headless=headless)
 
+    # Runner Arguments
+    num_of_iterations = 10000 # Adjust as needed
+    RunnerArgs.resume = True
+    RunnerArgs.resume_path = 'wandb/pretrain_wtw/files'
+    RunnerArgs.save_video_interval = 1000
+    RunnerArgs.save_interval = 1000
+
+    if RunnerArgs.resume and RunnerArgs.resume_path is not None:
+        RunnerArgs.run_id = os.listdir(RunnerArgs.resume_path + '/checkpoints')[0]
+        RunnerArgs.api_run_path = f'zoharmilman/robot-training/{RunnerArgs.run_id}'
+
     # Initialize wandb
     now = datetime.now()
     
-    wandb.init(project="robot-training", config={
-        "AC_Args": vars(AC_Args),
-        "PPO_Args": vars(PPO_Args),
-        "RunnerArgs": vars(RunnerArgs),
-        "Cfg": vars(Cfg),
-    },
-    name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    if RunnerArgs.resume: 
+        if 'pretrain' in RunnerArgs.resume_path:
+            wandb.init(project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+        else:
+            wandb.init(id=RunnerArgs.run_id, resume='must', project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    else:
+        wandb.init(project="robot-training", config={
+            "AC_Args": vars(AC_Args),
+            "PPO_Args": vars(PPO_Args),
+            "RunnerArgs": vars(RunnerArgs),
+            "Cfg": vars(Cfg),
+        },
+        name=now.strftime("%d_%m_%Y__%H_%M_%S"))
 
     # Log experiment parameters
     wandb.config.update({
@@ -238,7 +274,7 @@ def train_go1(headless=True):
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")
 
-    num_of_iterations = 5  # Adjust as needed
+ 
     print(f"Running for {num_of_iterations} iterations")
 
     # Start learning process
@@ -249,7 +285,10 @@ def train_go1(headless=True):
 
 if __name__ == '__main__':
     from pathlib import Path
+    import multiprocessing
 
+    multiprocessing.set_start_method('spawn')
+    
     # Setup wandb project and logging
     wandb.login(key="70236d768d6ec323c1df61af26e16d2a71c0f83f")  
     stem = Path(__file__).stem

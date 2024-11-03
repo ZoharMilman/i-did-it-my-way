@@ -1,3 +1,7 @@
+import functools
+import isaacgym
+import torch
+
 def config_env(Cfg):
     """ Test our new parameters """
     # 0. common
@@ -23,6 +27,12 @@ def config_env(Cfg):
     Cfg.rewards.fixed_leg_dof_indices = relevant_joints
     Cfg.control.override_joint_value  = positional_target
     Cfg.rewards.fixed_leg_dof_target  = positional_target
+
+    # Fault related configs 
+    Cfg.control.apply_faults = True
+    Cfg.control.fault_distribtion_func = functools.partial(torch.normal, mean=0.5, std=1) 
+    Cfg.control.fault_min = 0.1 # Minimum engine power to avoid engine shutdown
+    Cfg.control.fault_max = 1.4
 
 
 def config_log(logger, Cfg):

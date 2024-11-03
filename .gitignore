@@ -70,9 +70,12 @@ tmp
 *.tar
 
 # wandb
+wandb/
+checkpoints/
 scripts/wandb
 scripts/dogrobot
 scripts/checkpoints
+
 
 # isaacgym
 isaacgym

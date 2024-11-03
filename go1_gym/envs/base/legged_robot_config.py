@@ -1,7 +1,9 @@
 # License: see [LICENSE, LICENSES/legged_gym/LICENSE]
 
 from params_proto import PrefixProto, ParamsProto
-
+import isaacgym
+import torch
+import functools
 
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
@@ -207,6 +209,12 @@ class Cfg(PrefixProto, cli=False):
         default_joint_angles = {"joint_a": 0., "joint_b": 0.}
 
     class control(PrefixProto, cli=False):
+        # Fault parameters to reduce engine power
+        apply_faults = False
+        fault_distribtion_func = functools.partial(torch.normal, mean=0.8, std=0.1) 
+        fault_min = 0.1 # Minimum engine power to avoid engine shutdown
+        fault_max = 1.4
+
         # Solution 2 - override the actions\torques:
         override_joint_action = False # NOTE yoav: set the relevant joint action as zero
         override_action_index = 0 # TODO insert
