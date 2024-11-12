@@ -6,13 +6,13 @@ def config_env(Cfg):
     """ Test our new parameters """
     # 0. common
     import numpy as np
-    relevant_joints = [2,] # [0,1,2]
+    relevant_joints = [2] # [0,1,2]
     positional_target = -100 #np.array([0, 1, -2])
 
     # 1. positional action override - do not really set the position, uses the original controller to decide the torque
     Cfg.control.override_joint_action = False  #  True
     # # 2. torque action override
-    Cfg.control.override_torque = True
+    Cfg.control.override_torque = False
     Cfg.control.override_torque_value = -100  # zero to neutral, +-const to force extreme position?
 
     # # rewards (instead of selecting  the action, set a reward). pro: doesnt need to know how much force to apply
@@ -30,9 +30,14 @@ def config_env(Cfg):
 
     # Fault related configs 
     Cfg.control.apply_faults = True
-    Cfg.control.fault_distribtion_func = functools.partial(torch.normal, mean=0.5, std=1) 
+    Cfg.control.fault_joint_indices = [0, 1, 2] #, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    Cfg.control.fault_distribtion_func = functools.partial(torch.normal, mean=1, std=1) 
     Cfg.control.fault_min = 0.1 # Minimum engine power to avoid engine shutdown
-    Cfg.control.fault_max = 1.4
+    Cfg.control.fault_max = 2
+
+    # Joint limiting 
+    Cfg.control.enable_joint_limits = False
+    Cfg.control.joint_limits = { 2: (-0.5, 0.5) }
 
 
 def config_log(logger, Cfg):

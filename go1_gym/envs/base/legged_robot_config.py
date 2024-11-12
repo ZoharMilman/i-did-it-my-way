@@ -211,9 +211,17 @@ class Cfg(PrefixProto, cli=False):
     class control(PrefixProto, cli=False):
         # Fault parameters to reduce engine power
         apply_faults = False
+        fault_joint_indices = [1]
         fault_distribtion_func = functools.partial(torch.normal, mean=0.8, std=0.1) 
         fault_min = 0.1 # Minimum engine power to avoid engine shutdown
         fault_max = 1.4
+        
+        # Range-of-motion limits for specific joints
+        enable_joint_limits = False
+        joint_limits = {
+            # Example: 0: (-1.0, 1.0),  # Joint 0 limited to between -1.0 and 1.0 radians
+            #          3: (-0.5, 0.5)   # Joint 3 limited to between -0.5 and 0.5 radians
+        }
 
         # Solution 2 - override the actions\torques:
         override_joint_action = False # NOTE yoav: set the relevant joint action as zero

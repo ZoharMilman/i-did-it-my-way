@@ -36,12 +36,12 @@ def get_logdir(pretrain=False):
     return logdir
 
 
-def load_policy(logdir):
+def load_policy(logdir, step='latest'):
     print("LOADING POLICY FROM " + logdir)
     run_id = os.listdir(logdir + '/checkpoints')[0]
-    body = torch.jit.load(logdir + f'/checkpoints/{run_id}/body_latest.jit')
+    body = torch.jit.load(logdir + f'/checkpoints/{run_id}/body_{step}.jit')
     # body = torch.jit.load(logdir + '/checkpoints/body_000800.jit')
-    adaptation_module = torch.jit.load(logdir + f'/checkpoints/{run_id}/adaptation_module_latest.jit')
+    adaptation_module = torch.jit.load(logdir + f'/checkpoints/{run_id}/adaptation_module_{step}.jit')
     # adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_000800.jit')
 
     def policy(obs, info={}):
@@ -149,7 +149,7 @@ def get_video_env(env):
 
     return video_env
 
-def load_env_from_yaml(logdir, headless=False):
+def load_env_from_yaml(logdir, step, headless=False):
     print("----------------LOADING ENV FROM YAML---------------------")
     with open(logdir + "/config.yaml", 'r') as file:
         yaml_cfg = yaml.safe_load(file)
@@ -191,7 +191,7 @@ def load_env_from_yaml(logdir, headless=False):
     Cfg.control.control_type = "actuator_net"
 
     # our part
-    # config_env(Cfg) # THIS IS WHERE YOU NEED TO ADD MALFUNCTIONS
+    config_env(Cfg) # THIS IS WHERE YOU NEED TO ADD MALFUNCTIONS
 
     # from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
@@ -209,13 +209,13 @@ def load_env_from_yaml(logdir, headless=False):
     
     # actor_critic.load_state_dict(torch.load(logdir + '/checkpoints/ac_weights_last.pt'))
 
-    policy = load_policy(logdir)
+    policy = load_policy(logdir, step)
     # policy = actor_critic.act_inference
 
     return env, policy
 
 
-def get_play_frames(env, policy, num_eval_steps=900):
+def get_play_frames(env, policy, num_eval_steps=450):
     gaits = {"pronking": [0, 0, 0],
              "trotting": [0.5, 0, 0],
              "bounding": [0, 0.5, 0],
@@ -224,7 +224,7 @@ def get_play_frames(env, policy, num_eval_steps=900):
     x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 1.5, 0.0, 0.0
     body_height_cmd = 0.0
     step_frequency_cmd = 3.0
-    gait = torch.tensor(gaits["pacing"])
+    gait = torch.tensor(gaits["trotting"])
     footswing_height_cmd = 0.08
     pitch_cmd = 0.0
     roll_cmd = 0.0
@@ -267,24 +267,24 @@ def get_play_frames(env, policy, num_eval_steps=900):
 
 
 
-def play_go1_from_files(logdir, headless=True):
+def play_go1_from_files(logdir, step='latest', headless=True):
     # from ml_logger import logger
 
-    from pathlib import Path
     from go1_gym import MINI_GYM_ROOT_DIR
-    import glob
-    import os
+    import imageio
 
-    # logdir = "wandb/run-20241030_161551-9rrtez7u/files"
-    
-    # logdir = "runs/gait-conditioned-agility/pretrain-v0/train/025417.456545/"
-    # logdir = "wandb/latest-run/files"
-    env, policy = load_env_from_yaml(logdir, headless=headless)
-    # env, policy = load_env(logdir, headless=headless)
-    
+    # Create a media directory if it doesn't exist
+    media_dir = os.path.join(logdir, 'media')
+    os.makedirs(media_dir, exist_ok=True)
+
+    # Load environment and policy
+    env, policy = load_env_from_yaml(logdir, step, headless=headless)
+
+    # Generate frames
     frames = get_play_frames(env, policy)
-    
-    output_filename = logdir + '/play_video.mp4'
+
+    # Save video in the media directory
+    output_filename = os.path.join(media_dir, f'play_video_{step}.mp4')
     imageio.mimsave(output_filename, frames, fps=30)
     print("Saved video to: " + output_filename)
 
@@ -318,6 +318,31 @@ def play_go1(env, policy, num_eval_steps=900, headless=False):
 
     return frames
 
+# if __name__ == '__main__':
+#     # to see the environment rendering, set headless=False
+#     play_go1_from_files(logdir="wandb/run-20241103_191407-fn5iwsaf/files", step='000999', headless=False)
+
+
+
 if __name__ == '__main__':
-    # to see the environment rendering, set headless=False
-    play_go1_from_files(logdir="wandb/latest-run/files", headless=False)
+    logdir = "wandb/latest-run/files"
+    # run_id = os.listdir(logdir + '/checkpoints')[0]
+
+    # # Find all steps in the checkpoints directory
+    # checkpoint_dir = os.path.join(os.path.join(logdir, "checkpoints"), run_id)
+    # print(checkpoint_dir)
+    # checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "adaptation_module_*.jit"))
+    
+    # # Extract steps from filenames
+    # steps = []
+    # for file_path in checkpoint_files:
+    #     filename = os.path.basename(file_path)
+    #     step = filename.split('_')[-1].split('.')[0]
+    #     steps.append(step)
+    
+    # print(f"Found steps: {steps}")
+
+    # # Run play_go1_from_files for each step
+    # for step in steps:
+    #     print('Playing step: ' + step)
+    play_go1_from_files(logdir=logdir, step='latest', headless=False)

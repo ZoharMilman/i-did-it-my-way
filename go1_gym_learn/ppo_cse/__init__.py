@@ -173,12 +173,14 @@ class Runner:
         lenbuffer_eval = deque(maxlen=100)
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        rew_total_sum = 0
 
         print(__name__ + ": start iterate")
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
             print("ITERATION: ", it)
+            
 
             # Rollout
             with torch.inference_mode():
@@ -200,12 +202,15 @@ class Runner:
 
                     if 'train/episode' in infos:
                         wandb.log(infos['train/episode'], step=it)
+                        rew_total_sum += infos['train/episode']['rew_total']
+                        rew_total_mean = rew_total_sum/it
 
                     if 'eval/episode' in infos:
                         wandb.log(infos['eval/episode'], step=it)
 
                     if 'curriculum' in infos:
                         cur_reward_sum += rewards
+                        print("Reward Sum: ", cur_reward_sum)
                         cur_episode_length += 1
 
                         new_ids = (dones > 0).nonzero(as_tuple=False)
@@ -248,8 +253,10 @@ class Runner:
             learn_time = stop - start
 
             wandb.log({
-                "iteration": it, 
+                "iteration": it,   
                 "time_elapsed": time.time() - wandb.run.start_time,
+                "rew_total_sum": rew_total_sum,
+                "rew_total_mean": rew_total_mean,
                 "time_iter": learn_time,
                 "adaptation_loss": mean_adaptation_module_loss,
                 "mean_value_loss": mean_value_loss,
@@ -274,7 +281,7 @@ class Runner:
             if it % RunnerArgs.log_freq == 0:
                 wandb.log({"timesteps": self.tot_timesteps, "iterations": it}, step=it)
 
-            if (it + 1) % RunnerArgs.save_interval == 0:
+            if (it) % RunnerArgs.save_interval == 0:
                 # Save checkpoints
                 now = datetime.now()
                 current_time = now.strftime("%d_%m_%Y__%H_%M_%S")
