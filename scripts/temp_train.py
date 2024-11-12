@@ -133,7 +133,7 @@ def initialize_env_config(Cfg, headless=True):
     Cfg.reward_scales.collision = -5.0
 
     Cfg.rewards.reward_container_name = "CoRLRewards"
-    Cfg.rewards.only_positive_rewards = False
+    Cfg.rewards.only_positive_rewards = False # False
     Cfg.rewards.only_positive_rewards_ji22_style = True
     Cfg.rewards.sigma_rew_neg = 0.02
 
@@ -221,7 +221,7 @@ def train_go1(headless=True):
     env = initialize_env_config(Cfg, headless=headless)
 
     # Runner Arguments
-    num_of_iterations = 10000 # Adjust as needed
+    num_of_iterations = 20000 # Adjust as needed
     RunnerArgs.resume = True
     RunnerArgs.resume_path = 'wandb/pretrain_wtw/files'
     RunnerArgs.save_video_interval = 1000

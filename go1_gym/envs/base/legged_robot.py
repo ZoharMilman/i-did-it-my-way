@@ -948,63 +948,78 @@ class LeggedRobot(BaseTask):
             self.desired_footswing_height = self.commands[:, 9]
 
     def _compute_torques(self, actions):
-        """ Compute torques from actions.
-            Actions can be interpreted as position or velocity targets given to a PD controller, or directly as scaled torques.
-            [NOTE]: torques must have the same dimension as the number of DOFs, even if some DOFs are not actuated.
-
+        """ Compute torques from actions with selective joint fault factors and range-of-motion limits.
+        
         Args:
             actions (torch.Tensor): Actions
 
         Returns:
             [torch.Tensor]: Torques sent to the simulation
         """
-        # Computing motor faults factors
-    
-        if self.cfg.control.apply_faults:
-            fault_factors = self.cfg.control.fault_distribtion_func(size=(actions.shape[1],))
-            fault_factors = torch.clip(fault_factors, self.cfg.control.fault_min, self.cfg.control.fault_max)
-            fault_factors = fault_factors.to(self.device)
-
-        else: # Faults not applied
-            fault_factors = torch.ones(actions.shape[1], device=self.device)
-            # fault_factors.to(self.device)
         
-        # pd controller
+        # Initialize fault factors with ones (no fault)
+        fault_factors = torch.ones(actions.shape[1], device=self.device)
+        
+        # Apply motor fault factors to specified joints only
+        if self.cfg.control.apply_faults and self.cfg.control.fault_joint_indices:
+            # Generate unique fault factors for specified joints
+            fault_indices = self.cfg.control.fault_joint_indices
+            specific_fault_factors = self.cfg.control.fault_distribtion_func(size=(len(fault_indices),))
+            specific_fault_factors = torch.clip(specific_fault_factors, self.cfg.control.fault_min, self.cfg.control.fault_max)
+            
+            # Apply the fault factors only to the specified joints
+            fault_factors[fault_indices] = specific_fault_factors.to(self.device)
+            
+        # PD controller scaling actions
         actions_scaled = actions[:, :12] * self.cfg.control.action_scale
         actions_scaled[:, [0, 3, 6, 9]] *= self.cfg.control.hip_scale_reduction  # scale down hip flexion range
-        #if self.cfg.control.override_joint_action:
-        #    actions_scaled[:, self.cfg.control.override_action_index] = 0
-
+        
         if self.cfg.domain_rand.randomize_lag_timesteps:
             self.lag_buffer = self.lag_buffer[1:] + [actions_scaled.clone()]
             self.joint_pos_target = self.lag_buffer[0] + self.default_dof_pos
         else:
-            self.joint_pos_target = actions_scaled + self.default_dof_pos # TODO this should be overrided
+            self.joint_pos_target = actions_scaled + self.default_dof_pos  # TODO this should be overridden
 
         if self.cfg.control.override_joint_action:
             self.joint_pos_target[:, self.cfg.control.override_action_index] = self.cfg.control.override_action_value
 
+        # Apply joint position limits if enabled
+        if self.cfg.control.enable_joint_limits:
+            for joint_index, (min_limit, max_limit) in self.cfg.control.joint_limits.items():
+                self.joint_pos_target[:, joint_index] = torch.clamp(
+                    self.joint_pos_target[:, joint_index], min_limit, max_limit
+                )
+
+        # Choose control type
         control_type = self.cfg.control.control_type
 
         if control_type == "actuator_net":
             self.joint_pos_err = self.dof_pos - self.joint_pos_target + self.motor_offsets
             self.joint_vel = self.dof_vel
-            torques = self.actuator_network(self.joint_pos_err, self.joint_pos_err_last, self.joint_pos_err_last_last,
-                                            self.joint_vel, self.joint_vel_last, self.joint_vel_last_last)
+            torques = self.actuator_network(
+                self.joint_pos_err, self.joint_pos_err_last, self.joint_pos_err_last_last,
+                self.joint_vel, self.joint_vel_last, self.joint_vel_last_last
+            )
             self.joint_pos_err_last_last = torch.clone(self.joint_pos_err_last)
             self.joint_pos_err_last = torch.clone(self.joint_pos_err)
             self.joint_vel_last_last = torch.clone(self.joint_vel_last)
             self.joint_vel_last = torch.clone(self.joint_vel)
         elif control_type == "P":
             torques = self.p_gains * self.Kp_factors * (
-                    self.joint_pos_target - self.dof_pos + self.motor_offsets) - self.d_gains * self.Kd_factors * self.dof_vel
+                self.joint_pos_target - self.dof_pos + self.motor_offsets
+            ) - self.d_gains * self.Kd_factors * self.dof_vel
         else:
             raise NameError(f"Unknown controller type: {control_type}")
 
+        # Apply fault factors individually to each joint
         torques = torques * self.motor_strengths * fault_factors
         if self.cfg.control.override_torque:
-            torques[:,self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
+            torques[:, self.cfg.control.override_torque_index] = self.cfg.control.override_torque_value
+
+        # print('final torques: ', torch.clip(torques, -self.torque_limits, self.torque_limits))
+
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
+
 
     def _reset_dofs(self, env_ids, cfg):
         """ Resets DOF position and velocities of selected environmments
