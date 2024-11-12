@@ -534,9 +534,13 @@ class LeggedRobot(BaseTask):
         # self.sim = self.gym.create_sim(self.sim_device_id, -1, self.physics_engine,
         #                                self.sim_params)
         
-        print("Trying to create_sim with graphics device: ", self.graphics_device_id)
-        self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine,
-                                       self.sim_params)
+        if self.headless:
+            self.sim = self.gym.create_sim(self.sim_device_id, -1, self.physics_engine,
+                                        self.sim_params)
+        else:
+            print("Trying to create_sim with graphics device: ", self.graphics_device_id)
+            self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine,
+                                        self.sim_params)
 
         print('Sim device id is: ', self.sim_device_id)
 
