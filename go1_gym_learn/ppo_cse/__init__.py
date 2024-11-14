@@ -173,6 +173,7 @@ class Runner:
         lenbuffer_eval = deque(maxlen=100)
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        best_rew_total = -np.inf
         rew_total_sum = 0
 
         print(__name__ + ": start iterate")
@@ -202,8 +203,48 @@ class Runner:
 
                     if 'train/episode' in infos:
                         wandb.log(infos['train/episode'], step=it)
-                        rew_total_sum += infos['train/episode']['rew_total']
+                        rew_total = infos['train/episode']['rew_total']
+                        rew_total_sum += rew_total
                         rew_total_mean = rew_total_sum/it
+
+                        if rew_total > best_rew_total: 
+                            best_rew_total = rew_total
+                            path = 'checkpoints/' + wandb.run.id + '/'
+                            ac_weights_checkpoint_path = f"{path}/ac_weights_best.pt"
+                            ac_weights_path = f"{path}/ac_weights_last.pt"
+                            if os.path.exists(f"{path}"):
+                                torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
+                                torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
+                            else:
+                                os.makedirs(f"{path}")
+                                torch.save(self.alg.actor_critic.state_dict(), ac_weights_checkpoint_path)
+                                torch.save(self.alg.actor_critic.state_dict(), ac_weights_path)
+                                
+                            # Save other modules as needed
+                            os.makedirs(path, exist_ok=True)
+
+                            adaptation_module_checkpoint_path = f'{path}/adaptation_module_best.jit'
+                            adaptation_module_path = f'{path}/adaptation_module_latest.jit'
+                            adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
+                            traced_script_adaptation_module = torch.jit.script(adaptation_module)
+                            traced_script_adaptation_module.save(adaptation_module_checkpoint_path)
+                            traced_script_adaptation_module.save(adaptation_module_path)
+
+                            body_checkpoint_path = f'{path}/body_best.jit'
+                            body_path = f'{path}/body_latest.jit'
+                            body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
+                            traced_script_body_module = torch.jit.script(body_model)
+                            traced_script_body_module.save(body_path)
+                            traced_script_body_module.save(body_checkpoint_path)
+
+                            # Use wandb for checkpoint tracking
+                            wandb.save(ac_weights_path)
+                            wandb.save(ac_weights_checkpoint_path)
+                            wandb.save(adaptation_module_path)
+                            wandb.save(adaptation_module_checkpoint_path)
+                            wandb.save(body_path)
+                            wandb.save(body_checkpoint_path)
+
 
                     if 'eval/episode' in infos:
                         wandb.log(infos['eval/episode'], step=it)

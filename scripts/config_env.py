@@ -29,8 +29,8 @@ def config_env(Cfg):
     Cfg.rewards.fixed_leg_dof_target  = positional_target
 
     # Fault related configs 
-    Cfg.control.apply_faults = True
-    Cfg.control.fault_joint_indices = [0, 1, 2] #, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    Cfg.control.apply_faults = False
+    Cfg.control.fault_joint_indices = [2] #, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     Cfg.control.fault_distribtion_func = functools.partial(torch.normal, mean=1, std=1) 
     Cfg.control.fault_min = 0.1 # Minimum engine power to avoid engine shutdown
     Cfg.control.fault_max = 2

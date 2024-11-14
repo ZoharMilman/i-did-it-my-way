@@ -5,7 +5,7 @@ import wandb
 
 #bla bla
 
-def initialize_env_config(Cfg, headless=True):
+def initialize_env_config(Cfg, device_id=0, headless=True):
     print("Importing functions for enviorment initialization...")
     from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
@@ -117,8 +117,8 @@ def initialize_env_config(Cfg, headless=True):
     Cfg.reward_scales.feet_clearance = -0.0
     Cfg.reward_scales.feet_clearance_cmd = -0.0
     Cfg.reward_scales.feet_clearance_cmd_linear = -30.0
-    Cfg.reward_scales.orientation = -5.0 # edited
-    Cfg.reward_scales.orientation_control = -50.0 # edited
+    Cfg.reward_scales.orientation = 0.0 #-5.0 # edited
+    Cfg.reward_scales.orientation_control = -5.0 # -50.0 # edited
     Cfg.reward_scales.tracking_stance_width = -0.0
     Cfg.reward_scales.tracking_stance_length = -0.0
     Cfg.reward_scales.lin_vel_z = -0.02
@@ -196,7 +196,7 @@ def initialize_env_config(Cfg, headless=True):
     # THIS IS WHERE MALFUNCTIONS ARE ADDED
     config_env(Cfg)
 
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
+    env = VelocityTrackingEasyEnv(sim_device=f'cuda:{device_id}', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
     env = HistoryWrapper(env)
     print("Initialized Enviorment")
     return env
@@ -217,12 +217,13 @@ def train_go1(headless=True):
     from go1_gym_learn.ppo_cse import RunnerArgs
 
     # Initialize configuration and environment
+    device_id = 1
     config_go1(Cfg)
-    env = initialize_env_config(Cfg, headless=headless)
+    env = initialize_env_config(Cfg, device_id=1, headless=headless)
 
     # Runner Arguments
     num_of_iterations = 20000 # Adjust as needed
-    RunnerArgs.resume = True
+    RunnerArgs.resume = False
     RunnerArgs.resume_path = 'wandb/pretrain_wtw/files'
     RunnerArgs.save_video_interval = 1000
     RunnerArgs.save_interval = 1000
@@ -271,8 +272,8 @@ def train_go1(headless=True):
         "Cfg": vars(Cfg),
     })
 
-    gpu_id = 0
-    runner = Runner(env, device=f"cuda:{gpu_id}")
+    
+    runner = Runner(env, device=f"cuda:{device_id}")
 
  
     print(f"Running for {num_of_iterations} iterations")
@@ -295,6 +296,6 @@ if __name__ == '__main__':
     # wandb.init(project="robot-training", name=stem, sync_tensorboard=True)
 
     # to see the environment rendering, set headless=False
-    train_go1(headless=False)
+    train_go1(headless=True)
 
 
