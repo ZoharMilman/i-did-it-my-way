@@ -202,7 +202,7 @@ def initialize_env_config(Cfg, device_id=0, headless=True):
     return env
 
 
-def train_go1(headless=True):
+def train_go1(device_id=0, headless=True):
     import isaacgym
     assert isaacgym
     import torch
@@ -217,9 +217,8 @@ def train_go1(headless=True):
     from go1_gym_learn.ppo_cse import RunnerArgs
 
     # Initialize configuration and environment
-    device_id = 1
     config_go1(Cfg)
-    env = initialize_env_config(Cfg, device_id=1, headless=headless)
+    env = initialize_env_config(Cfg, device_id=device_id, headless=headless)
 
     # Runner Arguments
     num_of_iterations = 20000 # Adjust as needed
@@ -288,6 +287,21 @@ if __name__ == '__main__':
     from pathlib import Path
     import multiprocessing
 
+    import argparse
+    import os
+
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description="Train on a specified GPU.")
+    parser.add_argument('--gpu', type=int, required=True, help="The GPU ID to use (e.g., 0, 1, or 2).")
+    args = parser.parse_args()
+
+    # Set the GPU ID environment variable
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+
+    # Your training code here
+    print(f"Running on GPU {args.gpu}")
+
+
     multiprocessing.set_start_method('spawn')
     
     # Setup wandb project and logging
@@ -296,6 +310,6 @@ if __name__ == '__main__':
     # wandb.init(project="robot-training", name=stem, sync_tensorboard=True)
 
     # to see the environment rendering, set headless=False
-    train_go1(headless=True)
+    train_go1(device_id=args.gpu, headless=True)
 
 
