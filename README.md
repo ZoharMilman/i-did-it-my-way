@@ -103,6 +103,9 @@ pip3 install torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0+cu
 
 In this repository, run `pip install -e .`
 
+### Install the WandB logger
+run `pip install wandb`
+
 ### Verifying the Installation
 
 If everything is installed correctly, you should be able to run the test script with:
@@ -121,21 +124,21 @@ The GUI is off by default. To turn it on, set `headless=False` in `test.py`'s ma
 in [legged_robot.py](go1_gym/envs/base/legged_robot.py). The default configuration parameters including reward
 weightings are defined in [legged_robot_config.py::Cfg](go1_gym/envs/base/legged_robot_config.py).
 
-There are three scripts in the [scripts](scripts/) directory:
+There are three scripts in the [scripts](scripts/) directory. As well as a bash script for running multiple training instances on the same machine.
 
 ```bash
 scripts
 ├── __init__.py
 ├── play.py
 ├── test.py
-└── train.py
+├── train.py
+└── train_job.sh
+
 ```
 
 You can run the `test.py` script to verify your environment setup. If it runs then you have installed the gym
 environments correctly. To train an agent, run `train.py`. To evaluate a pretrained agent, run `play.py`. We provie a
 pretrained agent checkpoint in the [./runs/pretrain-v0](runs/pretrain-v0) directory.
-
-
 
 ### Training and Logging <a name="training"></a>
 
