@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
+from datetime import datetime
 from config_env import config_env, config_log
+import wandb
 
+#bla bla
 
-def train_go1(headless=True):
-    print("train.py.train entered")
-    import isaacgym
-    assert isaacgym
-    import torch
-
-    from go1_gym.envs.base.legged_robot_config import Cfg
-    from go1_gym.envs.go1.go1_config import config_go1
+def initialize_env_config(Cfg, device_id=0, headless=True):
+    print("Importing functions for enviorment initialization...")
     from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
-
-    from ml_logger import logger
-
-    from go1_gym_learn.ppo_cse import Runner
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
-    from go1_gym_learn.ppo_cse.actor_critic import AC_Args
-    from go1_gym_learn.ppo_cse.ppo import PPO_Args
-    from go1_gym_learn.ppo_cse import RunnerArgs
-
-    print("done imports")
-    config_go1(Cfg)
+    print("Done importing for enviorment initialization")
 
     Cfg.commands.num_lin_vel_bins = 30
     Cfg.commands.num_ang_vel_bins = 30
@@ -39,11 +27,7 @@ def train_go1(headless=True):
     Cfg.domain_rand.randomize_rigids_after_start = False
     Cfg.env.priv_observe_motion = False
     Cfg.env.priv_observe_gravity_transformed_motion = False
-    Cfg.domain_rand.randomize_friction_indep = False
-    Cfg.env.priv_observe_friction_indep = False
-    Cfg.domain_rand.randomize_friction = True
-    Cfg.env.priv_observe_friction = True
-    Cfg.domain_rand.friction_range = [0.1, 3.0]
+    Cfg.domain_rand.randomize_friction_indep = False 
     Cfg.domain_rand.randomize_restitution = True
     Cfg.env.priv_observe_restitution = True
     Cfg.domain_rand.restitution_range = [0.0, 0.4]
@@ -133,8 +117,8 @@ def train_go1(headless=True):
     Cfg.reward_scales.feet_clearance = -0.0
     Cfg.reward_scales.feet_clearance_cmd = -0.0
     Cfg.reward_scales.feet_clearance_cmd_linear = -30.0
-    Cfg.reward_scales.orientation = -5.0 # edited
-    Cfg.reward_scales.orientation_control = -50.0 # edited
+    Cfg.reward_scales.orientation = 0.0 #-5.0 # edited
+    Cfg.reward_scales.orientation_control = -5.0 # -50.0 # edited
     Cfg.reward_scales.tracking_stance_width = -0.0
     Cfg.reward_scales.tracking_stance_length = -0.0
     Cfg.reward_scales.lin_vel_z = -0.02
@@ -149,7 +133,7 @@ def train_go1(headless=True):
     Cfg.reward_scales.collision = -5.0
 
     Cfg.rewards.reward_container_name = "CoRLRewards"
-    Cfg.rewards.only_positive_rewards = False
+    Cfg.rewards.only_positive_rewards = False # False
     Cfg.rewards.only_positive_rewards_ji22_style = True
     Cfg.rewards.sigma_rew_neg = 0.02
 
@@ -209,59 +193,123 @@ def train_go1(headless=True):
     Cfg.commands.binary_phases = True
     Cfg.commands.gaitwise_curricula = True
 
+    # THIS IS WHERE MALFUNCTIONS ARE ADDED
     config_env(Cfg)
-    print("done config, init env")
-    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=headless, cfg=Cfg)
-    print("log n wrap")
-    # log the experiment parameters
-    logger.log_params(AC_Args=vars(AC_Args), PPO_Args=vars(PPO_Args), RunnerArgs=vars(RunnerArgs),
-                      Cfg=vars(Cfg))
-    config_log(logger, env.cfg)
+
+    env = VelocityTrackingEasyEnv(sim_device=f'cuda:{device_id}', headless=headless, cfg=Cfg) #, eval_cfg=Cfg)
     env = HistoryWrapper(env)
-    gpu_id = 0
-    print("init runner")
-    runner = Runner(env, device=f"cuda:{gpu_id}")
-    print(__name__+": runner.learn()")
-    num_of_iterations = 100000 #35000 # was 100,000
-    print("running for %s iterations" % num_of_iterations)
+    print("Initialized Enviorment")
+    return env
+
+
+def train_go1(device_id=0, headless=True):
+    import isaacgym
+    assert isaacgym
+    import torch
+    import wandb
+    import os
+
+    from go1_gym.envs.base.legged_robot_config import Cfg
+    from go1_gym.envs.go1.go1_config import config_go1
+    from go1_gym_learn.ppo_cse import Runner
+    from go1_gym_learn.ppo_cse.actor_critic import AC_Args
+    from go1_gym_learn.ppo_cse.ppo import PPO_Args
+    from go1_gym_learn.ppo_cse import RunnerArgs
+
+    # Initialize configuration and environment
+    config_go1(Cfg)
+    env = initialize_env_config(Cfg, device_id=device_id, headless=headless)
+
+    # Runner Arguments
+    num_of_iterations = 20000 # Adjust as needed
+    RunnerArgs.resume = False
+    RunnerArgs.resume_path = 'wandb/pretrain_wtw/files'
+    RunnerArgs.save_video_interval = 1000
+    RunnerArgs.save_interval = 1000
+
+    if RunnerArgs.resume and RunnerArgs.resume_path is not None:
+        RunnerArgs.run_id = os.listdir(RunnerArgs.resume_path + '/checkpoints')[0]
+        RunnerArgs.api_run_path = f'zoharmilman/robot-training/{RunnerArgs.run_id}'
+
+    # Initialize wandb
+    now = datetime.now()
+    
+
+    if RunnerArgs.resume: 
+        if 'pretrain' in RunnerArgs.resume_path:
+            wandb.init(project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+        else:
+            wandb.init(id=RunnerArgs.run_id, resume='must', project="robot-training", config={
+                "AC_Args": vars(AC_Args),
+                "PPO_Args": vars(PPO_Args),
+                "RunnerArgs": vars(RunnerArgs),
+                "Cfg": vars(Cfg),
+            },
+            name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    else:
+        wandb.init(project="robot-training", config={
+            "AC_Args": vars(AC_Args),
+            "PPO_Args": vars(PPO_Args),
+            "RunnerArgs": vars(RunnerArgs),
+            "Cfg": vars(Cfg),
+        },
+        name=now.strftime("%d_%m_%Y__%H_%M_%S"))
+
+    # Log experiment parameters
+    wandb.config.update({
+        "AC_Args": vars(AC_Args),
+        "PPO_Args": vars(PPO_Args),
+        "RunnerArgs": vars(RunnerArgs),
+        "Cfg": vars(Cfg),
+    })
+
+    
+    runner = Runner(env, device=f"cuda:{device_id}")
+
+ 
+    print(f"Running for {num_of_iterations} iterations")
+
+    # Start learning process
     runner.learn(num_learning_iterations=num_of_iterations, init_at_random_ep_len=True, eval_freq=100)
 
+    # Finish wandb run
+    wandb.finish()
 
 if __name__ == '__main__':
     from pathlib import Path
-    from ml_logger import logger
-    from go1_gym import MINI_GYM_ROOT_DIR
+    import multiprocessing
 
+    import argparse
+    import os
+
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description="Train on a specified GPU.")
+    parser.add_argument('--gpu', type=int, required=True, help="The GPU ID to use (e.g., 0, 1, or 2).")
+    args = parser.parse_args()
+
+    # Set the GPU ID environment variable
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+
+    # Your training code here
+    print(f"Running on GPU {args.gpu}")
+
+
+    multiprocessing.set_start_method('spawn')
+    
+    # Setup wandb project and logging
+    wandb.login(key="70236d768d6ec323c1df61af26e16d2a71c0f83f")  
     stem = Path(__file__).stem
-    logger.configure(logger.utcnow(f'gait-conditioned-agility/%Y-%m-%d/{stem}/%H%M%S.%f'),
-                     root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
-    logger.log_text("""
-                charts: 
-                - yKey: train/episode/rew_total/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_tracking_lin_vel/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_tracking_contacts_shaped_force/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_action_smoothness_1/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_action_smoothness_2/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_tracking_contacts_shaped_vel/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_orientation_control/mean
-                  xKey: iterations
-                - yKey: train/episode/rew_dof_pos/mean
-                  xKey: iterations
-                - yKey: train/episode/command_area_trot/mean
-                  xKey: iterations
-                - yKey: train/episode/max_terrain_height/mean
-                  xKey: iterations
-                - type: video
-                  glob: "videos/*.mp4"
-                - yKey: adaptation_loss/mean
-                  xKey: iterations
-                """, filename=".charts.yml", dedent=True)
+    # wandb.init(project="robot-training", name=stem, sync_tensorboard=True)
 
     # to see the environment rendering, set headless=False
-    train_go1(headless=True)
+    train_go1(device_id=args.gpu, headless=True)
+
+

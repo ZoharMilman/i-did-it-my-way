@@ -24,6 +24,10 @@ import yaml
 
 import wandb
 
+import os
+import imageio
+from PIL import Image, ImageDraw, ImageFont
+
 print("Lets play!")
 
 def get_logdir(pretrain=False):
@@ -42,9 +46,7 @@ def load_policy(logdir, step='latest'):
     print("LOADING POLICY FROM " + logdir)
     run_id = os.listdir(logdir + '/checkpoints')[0]
     body = torch.jit.load(logdir + f'/checkpoints/{run_id}/body_{step}.jit')
-    # body = torch.jit.load(logdir + '/checkpoints/body_000800.jit')
     adaptation_module = torch.jit.load(logdir + f'/checkpoints/{run_id}/adaptation_module_{step}.jit')
-    # adaptation_module = torch.jit.load(logdir + '/checkpoints/adaptation_module_000800.jit')
 
     def policy(obs, info={}):
         i = 0
@@ -103,7 +105,7 @@ def load_env(logdir, headless=False):
 
     from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
-    env = VelocityTrackingEasyEnv(sim_device='cpu', headless=False, cfg=Cfg) 
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg) 
     env = HistoryWrapper(env)
 
     # load policy
@@ -146,13 +148,16 @@ def get_video_env(env):
     video_cfg.domain_rand.randomize_lag_timesteps = True
     video_cfg.control.control_type = "actuator_net"
 
-    video_env = VelocityTrackingEasyEnv(sim_device='cpu', headless=False, cfg=video_cfg)
+    video_env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=video_cfg)
     video_env = HistoryWrapper(video_env)
 
     return video_env
 
-def load_env_from_yaml(logdir, step, headless=False):
+def load_env_from_yaml(logdir, headless=False):
     print("----------------LOADING ENV FROM YAML---------------------")
+    # from go1_gym.envs.base.legged_robot_config import Cfg
+    from copy import deepcopy
+    # local_Cfg = deepcopy(Cfg)
     with open(logdir + "/config.yaml", 'r') as file:
         yaml_cfg = yaml.safe_load(file)
         print(yaml_cfg.keys())
@@ -166,6 +171,8 @@ def load_env_from_yaml(logdir, step, headless=False):
         for key, value in cfg.items():
             if hasattr(Cfg, key):
                 for key2, value2 in cfg[key].items():
+                    # print(key2)
+                    # print(getattr(Cfg, key))
                     setattr(getattr(Cfg, key), key2, value2)
 
     # turn off DR for evaluation script
@@ -201,7 +208,7 @@ def load_env_from_yaml(logdir, step, headless=False):
 
     # from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 
-    env = VelocityTrackingEasyEnv(sim_device='cpu', headless=False, cfg=Cfg)
+    env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
     env = HistoryWrapper(env)
 
     # load policy
@@ -215,10 +222,10 @@ def load_env_from_yaml(logdir, step, headless=False):
     
     # actor_critic.load_state_dict(torch.load(logdir + '/checkpoints/ac_weights_last.pt'))
 
-    policy = load_policy(logdir, step)
+    # policy = load_policy(logdir, step)
     # policy = actor_critic.act_inference
 
-    return env, policy
+    return env
 
 
 def get_play_frames(env, policy, num_eval_steps=450):
@@ -227,7 +234,7 @@ def get_play_frames(env, policy, num_eval_steps=450):
              "bounding": [0, 0.5, 0],
              "pacing": [0, 0, 0.5]}
 
-    x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 1.5, 0.0, 0.0
+    x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 1, 0.0, 0.0
     body_height_cmd = 0.0
     step_frequency_cmd = 3.0
     gait = torch.tensor(gaits["trotting"])
@@ -272,10 +279,7 @@ def get_play_frames(env, policy, num_eval_steps=450):
     return frames
 
 
-def download_run_files(run_id, download_dir='wandb'):
-    # Initialize wandb and download files for the given run_id
-    api = wandb.Api()
-    run = api.run(f"zoharmilman/robot-training/{run_id}")  # Replace with your project path
+def download_run_files(run, download_dir='wandb'):
     
     # Ensure download directory exists
     os.makedirs(download_dir, exist_ok=True)
@@ -297,73 +301,79 @@ def download_run_files(run_id, download_dir='wandb'):
     return download_dir
 
 
-def play_go1_from_files(run_id, step='latest', headless=True):
+def add_caption_to_frames(frames, caption):
+    """
+    Adds a caption to each frame in the video.
+    """
+    font = ImageFont.load_default()  # Load a default font
+    captioned_frames = []
+    
+    for frame in frames:
+        image = Image.fromarray(frame)
+        draw = ImageDraw.Draw(image)
+        
+        # Use ImageFont.getbbox to calculate text dimensions
+        text_bbox = font.getbbox(caption)
+        text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+        
+        x = (image.width - text_width) // 2
+        y = image.height - text_height - 10  # Place text near the bottom
+        
+        draw.text((x, y), caption, fill="black", font=font)
+        captioned_frames.append(np.array(image))
+    
+    return captioned_frames
+
+
+
+def play_go1_from_files(run_id, steps='latest', output_video_name=f'play_video_combined.mp4', headless=True):
+    """
+    Create a video for one or multiple steps, stitching them together with captions.
+    """
     # Define the download directory for the run
-    download_dir = f'wandb/{run_id}'
+    download_dir = f'../wandb/{run_id}'
+    api = wandb.Api()
+    run = api.run(f"zoharmilman/robot-training/{run_id}")  
 
     # Check if the directory exists; if not, download files from wandb
     if not os.path.exists(download_dir):
         print(f"Directory {download_dir} not found. Downloading files...")
-        download_run_files(run_id, download_dir=download_dir)
+        download_run_files(run, download_dir=download_dir)
     else:
         print(f"Directory {download_dir} already exists. Skipping download.")
 
-    # Load environment and policy from the downloaded directory
-    env, policy = load_env_from_yaml(download_dir, step, headless=headless)
+    # Ensure steps is a list for uniform processing
+    if isinstance(steps, str) or isinstance(steps, int):
+        steps = [steps]
 
-    # Generate frames
-    frames = get_play_frames(env, policy)
+    all_frames = []
+    env = load_env_from_yaml(download_dir, headless=headless)
 
-    # Save video in the media directory
+    for step in steps:
+        print(f"Processing step: {step}")
+        # Load environment and policy for the current step
+        
+        try: 
+            policy = load_policy(download_dir, step)
+            # Generate frames and add caption
+            env.reset()
+            frames = get_play_frames(env, policy)
+            caption = f"Run id: {run_id}, Step: {step}"
+            frames_with_caption = add_caption_to_frames(frames, caption)
+
+            # Append frames to the overall list
+            all_frames.extend(frames_with_caption)
+        except ValueError:
+            print('-----Tried to load a non-existant step------')
+
+    # Save stitched video in the media directory
     media_dir = os.path.join(download_dir, 'media')
     os.makedirs(media_dir, exist_ok=True)
-    output_filename = os.path.join(media_dir, f'play_video_{step}.mp4')
-    imageio.mimsave(output_filename, frames, fps=30)
+    output_filename = os.path.join(media_dir, output_video_name)
+    imageio.mimsave(output_filename, all_frames, fps=30)
     print("Saved video to: " + output_filename)
 
 
-
-# def play_go1_from_files(logdir, step='latest', headless=True):
-#     # from ml_logger import logger
-
-#     from go1_gym import MINI_GYM_ROOT_DIR
-#     import imageio
-
-#     # Create a media directory if it doesn't exist
-#     media_dir = os.path.join(logdir, 'media')
-#     os.makedirs(media_dir, exist_ok=True)
-
-#     # Load environment and policy
-#     env, policy = load_env_from_yaml(logdir, step, headless=headless)
-
-#     # Generate frames
-#     frames = get_play_frames(env, policy)
-
-#     # Save video in the media directory
-#     output_filename = os.path.join(media_dir, f'play_video_{step}.mp4')
-#     imageio.mimsave(output_filename, frames, fps=30)
-#     print("Saved video to: " + output_filename)
-
-#     # # plot target and measured forward velocity
-#     # from matplotlib import pyplot as plt
-#     # import matplotlib
-#     # matplotlib.use('TKAgg')
-#     # fig, axs = plt.subplots(2, 1, figsize=(12, 5))
-#     # axs[0].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), measured_x_vels, color='black', linestyle="-", label="Measured")
-#     # axs[0].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), target_x_vels, color='black', linestyle="--", label="Desired")
-#     # axs[0].legend()
-#     # axs[0].set_title("Forward Linear Velocity")
-#     # axs[0].set_xlabel("Time (s)")
-#     # axs[0].set_ylabel("Velocity (m/s)")
-
-#     # axs[1].plot(np.linspace(0, num_eval_steps * env.dt, num_eval_steps), joint_positions[:,:6], linestyle="-", label=[str(i) for i in range(6)])
-#     # axs[1].set_title("Joint Positions")
-#     # axs[1].set_xlabel("Time (s)")
-#     # axs[1].set_ylabel("Joint Position (rad)")
-#     # plt.legend()
-
-#     # plt.tight_layout()
-#     # plt.show()
 
 def play_go1(env, policy, num_eval_steps=900, headless=False):
     # Get a video enviorment with DR turned off
@@ -379,24 +389,65 @@ def play_go1(env, policy, num_eval_steps=900, headless=False):
 
 
 if __name__ == '__main__':
-    # logdir = "wandb/latest-run/files"
-    run_id = "o8zw1ev7"
+    # vye0j20m - From nothing with nothing 1 
+    # 3h1exxz0 - From nothing with nothing 2
+    # wy1pnf38 - From nothing with nothing 3
+    # dfs31hyt - From nothing with nothing 4
+    # xxoral21 - From nothing with nothing 5
 
-    # # Find all steps in the checkpoints directory
-    # checkpoint_dir = os.path.join(os.path.join(logdir, "checkpoints"), run_id)
-    # print(checkpoint_dir)
-    # checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "adaptation_module_*.jit"))
-    
-    # # Extract steps from filenames
-    # steps = []
-    # for file_path in checkpoint_files:
-    #     filename = os.path.basename(file_path)
-    #     step = filename.split('_')[-1].split('.')[0]
-    #     steps.append(step)
-    
-    # print(f"Found steps: {steps}")
+    # bu20t6v5 - from nothing with only pos rewards 1
+    # 8l5sx020 - from nothing with only pos rewards 2
+    # c65ybabb - from nothing with only pos rewards 3
+    # jz8kdqr7 - from nothing with only pos rewards 4
 
-    # # Run play_go1_from_files for each step
-    # for step in steps:
-    #     print('Playing step: ' + step)
-    play_go1_from_files(run_id=run_id, step='latest', headless=False)
+    # 958kz3g9 - From nothing with -1 raribert heuristic scale 1
+    # k1zkcjlg - From nothing with -1 raribert heuristic scale 2
+    # kwwxvace - From nothing with -1 raribert heuristic scale 3 
+    # lw46f0dh - From nothing with -1 raribert heuristic scale 4
+
+    # lpu7s93c - From nothing with fault on 2 std=1 mean=1 1
+    # m47r5l7u - From nothing with fault on 2 std=1 mean=1 2
+    # x4mw4i4y - From nothing with fault on 2 std=1 mean=1 3
+    # usf4i72p - From pretrain fault on 2 std=1 mean1 1 1 
+    # 3rhaayes - From pretrain fault on 2 std=1 mean1 1 2
+    # l93ss9p4 - From pretrain fault on 2 std=1 mean1 1 3
+
+    # 70d8l0br - from nothing with limit on joint 2 from -pi/4 to pi/4 1
+    # x7ruwrcj - from nothing with limit on joint 2 from -pi/4 to pi/4 2:
+    #    Walked on 2000
+    # 125mit4e - from nothing with limit on joint 2 from -pi/4 to pi/4 3
+    # qdlgafl1 - from nothing with limit on joint 2 from -pi/4 to pi/4 4
+    # j2lj4qbg - from pretrain with limit on joint 2 from -pi/4 to pi/4 1
+    # z5de61zd - from pretrain with limit on joint 2 from -pi/4 to pi/4 2
+    # oeii2foh - from pretrain with limit on joint 2 from -pi/4 to pi/4 3
+    # zu85qxrw - from pretrain with limit on joint 2 from -pi/4 to pi/4 4
+
+    # nnc1rfh5 - From nothing joint 1,4,7,10 restricted between -pi/2 and pi/2 1 
+    # nicros41 - From nothing joint 1,4,7,10 restricted between -pi/2 and pi/2 2
+    # crsj54o6 - From nothing joint 1,4,7,10 restricted between -pi/2 and pi/2 3
+    # 5peeme6x - From pretrain joint 1,4,7,10 restricted between -pi/2 and pi/2 1
+    # jurylyvy - From pretrain joint 1,4,7,10 restricted between -pi/2 and pi/2 2
+    # 9urkk5sp - From pretrain joint 1,4,7,10 restricted between -pi/2 and pi/2 3
+    # 6hdfdv97 - From pretrain joint 1,4,7,10 restricted between -pi/2 and pi/2 4
+
+    # 6zbe64lw - from pretrain with limit on joint 1, 4 from -pi/4 to pi/4 1
+    # o7ck8njf - from pretrain with limit on joint 1, 4 from -pi/4 to pi/4 2
+    # ajqsarup - from pretrain with limit on joint 1, 4 from -pi/4 to pi/4 3
+    # pvcwfwxz - from pretrain with limit on joint 1, 4 from -pi/4 to pi/4 4
+
+    # 7eyo5sv7 - from pretrain with limit on joint 1, 4 from 0 to pi/4 1
+    # 617hqdc3 - from pretrain with limit on joint 1, 4 from 0 to pi/4 2
+    # 2v42qgh8 - from pretrain with limit on joint 1, 4 from 0 to pi/4 3
+    # zxw8x7km - from pretrain with limit on joint 1, 4 from 0 to pi/4 4
+
+    max_step = 50000
+    save_interval = 1000
+    steps = [f"{i:06}" for i in range(0, max_step + 1, save_interval)] + ['latest', 'best']
+    print(steps)
+    
+    run_id = "vye0j20m"
+
+    play_go1_from_files(run_id=run_id, steps=steps, output_video_name='play_video_combined_diff_commands_2.mp4', headless=False)
+
+
+    

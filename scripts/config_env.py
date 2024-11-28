@@ -10,7 +10,7 @@ def config_env(Cfg):
     positional_target = -100 #np.array([0, 1, -2])
 
     # 1. positional action override - do not really set the position, uses the original controller to decide the torque
-    Cfg.control.override_joint_action = False  #  True
+    Cfg.control.override_joint_action = False  #  False
     # # 2. torque action override
     Cfg.control.override_torque = False
     Cfg.control.override_torque_value = -100  # zero to neutral, +-const to force extreme position?
@@ -30,15 +30,18 @@ def config_env(Cfg):
 
     # Fault related configs 
     Cfg.control.apply_faults = False
-    Cfg.control.fault_joint_indices = [2] #, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    Cfg.control.fault_joint_indices = [2] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     Cfg.control.fault_distribtion_func = functools.partial(torch.normal, mean=1, std=1) 
     Cfg.control.fault_min = 0.1 # Minimum engine power to avoid engine shutdown
     Cfg.control.fault_max = 2
 
     # Joint limiting 
-    Cfg.control.enable_joint_limits = False
-    Cfg.control.joint_limits = { 2: (-0.5, 0.5) }
+    Cfg.control.enable_joint_limits = True
+    Cfg.control.joint_limits = {1: (0, np.pi/4), 4: (0, np.pi/4) }
 
+    # {2: (-np.pi/4, np.pi/4) }
+    # {1: (0, np.pi/4), 4: (0, np.pi/4) }
+    # {1: (-np.pi/2, np.pi/2), 4: (-np.pi/2, np.pi/2), 7: (-np.pi/2, np.pi/2), 10: (-np.pi/2, np.pi/2)}
 
 def config_log(logger, Cfg):
     """ write summary """
