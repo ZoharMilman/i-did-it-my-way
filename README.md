@@ -137,8 +137,7 @@ scripts
 ```
 
 You can run the `test.py` script to verify your environment setup. If it runs then you have installed the gym
-environments correctly. To train an agent, run `train.py`. To evaluate a pretrained agent, run `play.py`. We provie a
-pretrained agent checkpoint in the [./runs/pretrain-v0](runs/pretrain-v0) directory.
+environments correctly. To train an agent, run `train.py`. To evaluate a pretrained agent, run `play.py`. 
 
 ### Training and Logging <a name="training"></a>
 
@@ -148,28 +147,10 @@ To train the Go1 controller from [Walk these Ways](https://sites.google.com/view
 python scripts/train.py
 ```
 
-After initializing the simulator, the script will print out a list of metrics every ten training iterations.
-
 Training with the default configuration requires about 12GB of GPU memory. If you have less memory available, you can 
 still train by reducing the number of parallel environments used in simulation (the default is `Cfg.env.num_envs = 4000`).
 
-To visualize training progress, first start the ml_dash frontend app:
-```bash
-python -m ml_dash.app
-```
-then start the ml_dash backend server by running this command in the parent directory of the `runs` folder:
-```bash
-python -m ml_dash.server .
-```
-
-Finally, use a web browser to go to the app IP (defaults to `localhost:3001`) 
-and create a new profile with the credentials:
-
-Username: `runs`
-API: [server IP] (defaults to `localhost:8081`)
-Access Token: [blank]
-
-Now, clicking on the profile should yield a dashboard interface visualizing the training runs.
+To visualize training progress, first start use your WandB account and click the link generated at the start of the run. 
 
 ### Analyzing the Policy <a name="analysis"></a>
 
@@ -178,6 +159,8 @@ To evaluate the most recently trained model, run:
 ```bash
 python scripts/play.py
 ```
+with run-id being latest-run/files
+
 
 The robot is commanded to run forward at 3m/s for 5 seconds. After completing the simulation, 
 the script plots the robot's velocity and joint angles.
